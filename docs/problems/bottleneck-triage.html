@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>瓶颈会诊：一次修好三个问题 · LeetCPU 中文站</title>
+<meta name="description" content="访存跨行、分支随机、冗余依赖 —— 三处病灶需要同时处理。">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232f6feb'/><text x='16' y='23' font-size='19' font-family='monospace' fill='white' text-anchor='middle'>C</text></svg>">
+</head>
+<body data-root="../">
+<header class="topbar">
+  <a class="brand" href="../index.html"><span class="dot">C</span>LeetCPU 中文站</a>
+  <nav class="topnav"><a href="../index.html" class="">概览</a><a href="../modules.html" class="">知识模块</a><a href="../problems.html" class="">全部题目</a></nav>
+  <div class="searchbox">
+    <input id="q" type="search" placeholder="搜索题目 / 模块…" autocomplete="off">
+    <div id="results"></div>
+  </div>
+  <button class="iconbtn" data-theme-toggle title="切换明暗主题">◐</button>
+</header>
+<div class="wrap">
+  <nav class="sidebar"><h4>开始</h4>
+<a href="../index.html" class="">概览</a>
+<a href="../modules.html" class="">知识模块</a>
+<a href="../problems.html" class="">全部题目</a>
+<h4>知识模块</h4>
+<a href="../modules/branch.html" class="">分支预测</a>
+<a href="../modules/cache.html" class="">缓存层次</a>
+<a href="../modules/ilp.html" class="">ILP 与流水线</a>
+<a href="../modules/memory.html" class="">内存层次与延迟隐藏</a>
+<a href="../modules/rob.html" class="">ROB 与乱序执行</a>
+<a href="../modules/frontend.html" class="">前端与指令缓存</a>
+<a href="../modules/tlb.html" class="">TLB 与地址转换</a>
+<a href="../modules/simd.html" class="">SIMD 与向量化</a>
+<h4>题目</h4>
+<h4 style="margin-top:12px">分支预测</h4>
+<a href="../problems/stable-partition-branches.html" class=""><span class="num">01</span>稳定划分：让分支变得可预测</a>
+<a href="../problems/branchless-score-window.html" class=""><span class="num">10</span>区间计分：用无符号技巧消除分支</a>
+<a href="../problems/masked-saxpy-branchless.html" class=""><span class="num">20</span>掩码 SAXPY：去分支换取吞吐</a>
+<a href="../problems/lookup-table-grade-bands.html" class=""><span class="num">22</span>等级分档：用查表替代嵌套分支</a>
+<h4 style="margin-top:12px">缓存层次</h4>
+<a href="../problems/matrix-multiply-tiling.html" class=""><span class="num">02</span>矩阵乘法：分块与转置</a>
+<a href="../problems/particle-struct-repacking.html" class=""><span class="num">08</span>粒子结构体：AoS 转 SoA</a>
+<a href="../problems/image-blur-tiling.html" class=""><span class="num">09</span>图像模糊：让工作集留在缓存里</a>
+<a href="../problems/ece-jacobi-stencil-lab.html" class=""><span class="num">11</span>Jacobi 五点 stencil：二维分块</a>
+<a href="../problems/3d-loop-interchange.html" class=""><span class="num">14</span>三维数组：修正循环顺序</a>
+<a href="../problems/binary-search-eytzinger.html" class=""><span class="num">15</span>二分查找：Eytzinger 布局 + 预取</a>
+<a href="../problems/row-major-cache-locality.html" class=""><span class="num">17</span>二维网格求和：修正列优先遍历</a>
+<h4 style="margin-top:12px">ILP 与流水线</h4>
+<a href="../problems/reduction-tree-ilp.html" class=""><span class="num">03</span>规约树：打断依赖链</a>
+<a href="../problems/bitset-popcount-throughput.html" class=""><span class="num">07</span>位图统计：用 popcount 硬件替代逐位扫描</a>
+<a href="../problems/histogram-dependency-chains.html" class=""><span class="num">13</span>直方图：打断写依赖链</a>
+<a href="../problems/streaming-square-sum.html" class=""><span class="num">16</span>流式平方和：多累加器提升 ILP</a>
+<a href="../problems/saxpy-auto-vectorize.html" class=""><span class="num">18</span>SAXPY：解锁自动向量化</a>
+<a href="../problems/dot-product-eight-accumulators.html" class=""><span class="num">21</span>点积：八个累加器</a>
+<h4 style="margin-top:12px">内存层次与延迟隐藏</h4>
+<a href="../problems/interleaved-pointer-chasing.html" class=""><span class="num">04</span>指针追逐：恢复内存级并行</a>
+<a href="../problems/strided-sum-prefetch.html" class=""><span class="num">06</span>跨步求和：用预取隐藏延迟</a>
+<a href="../problems/irregular-gather-prefetch.html" class=""><span class="num">12</span>不规则聚集：为随机访问提前预取</a>
+<h4 style="margin-top:12px">ROB 与乱序执行</h4>
+<a href="../problems/bottleneck-triage.html" class="on"><span class="num">05</span>瓶颈会诊：一次修好三个问题</a>
+<h4 style="margin-top:12px">TLB 与地址转换</h4>
+<a href="../problems/gather-reorder-cache-clustering.html" class=""><span class="num">19</span>聚集重排：按页聚簇访问</a></nav>
+  <main>
+<div class="meta">
+  <span class="badge">05</span>
+  <span class="badge hard">困难</span>
+  <span class="badge mod" style="background:#2dd4bf">ROB 与乱序执行</span>
+  <span class="sub">综合诊断 · Perceptron BP · realistic config</span>
+</div>
+<h1>瓶颈会诊：一次修好三个问题</h1>
+<p class="lead">访存跨行、分支随机、冗余依赖 —— 三处病灶需要同时处理。</p>
+<p class="sub">原始英文标题：Bottleneck Triage — Diagnose and Fix</p>
+
+<h2 id="statement">题面</h2>
+<p>这个负载之所以慢，有几个相互独立的原因。基线指标：IPC 0.7（目标 &gt; 3.0）、L1 MPKI 36.0（目标 &lt; 4.0）、Branch MPKI 18.0（目标 &lt; 2.0）。</p><p>起始代码同时混合了三种瓶颈：局部性差、分支不可预测、以及不必要的依赖压力。</p><p>请结合计数器、源码与汇编定位这些问题，并重写循环使三个目标<strong>同时</strong>达成。</p>
+<div class="callout"><b>任务</b><br>重写 <code>long solve(int *arr, int n)</code>，返回正确的总和，同时修复基线中的分支、缓存局部性与依赖问题。</div>
+
+<h3 id="constraints">约束</h3>
+<ul><li>输出必须匹配参考总和</li><li>N = 100000，固定种子</li><li>三个目标必须同时达成</li><li>允许 SIMD</li><li>允许改变遍历顺序与控制流</li></ul>
+
+<h3 id="examples">示例</h3>
+<div class="kv"><div><b>输入</b>arr = 100,000 个整数，以步长 16 采样</div><div><b>输出</b>所有满足 <code>val &amp; 1</code> 的元素之和</div><div><b>说明</b>基线中的 <code>sum = sum + (val * 0)</code> 是人为制造的冗余依赖，实际不改变结果，必须识别并删除。</div></div>
+
+<h2 id="targets">指标目标</h2>
+<table><thead><tr><th style="width:170px">指标</th><th style="width:130px">目标</th><th>含义</th></tr></thead>
+<tbody><tr><td><b>IPC</b></td><td><code>&gt; 3</code></td><td class="sub">每周期退休指令数</td></tr><tr><td><b>L1 MPKI</b></td><td><code>&lt; 4</code></td><td class="sub">每千条指令的 L1 数据缓存失效次数</td></tr><tr><td><b>Branch MPKI</b></td><td><code>&lt; 2</code></td><td class="sub">每千条指令的分支预测失败次数</td></tr></tbody></table>
+
+<h2 id="starter">起始代码</h2>
+<div class="codeblock">
+  <div class="codebar"><span class="label">baseline.c</span><button class="copybtn">复制</button></div>
+  <pre data-code="#define N 100000
+
+long solve(int *arr, int n) {
+    long sum = 0;
+    for (int i = 0; i &lt; n; i++) {
+        int val = arr[i * 16];          /* bad spatial locality */
+        if (val &amp; 1)                    /* branch near 50/50 */
+            sum += val;
+        sum = sum + (val * 0);          /* useless dependency in hot loop */
+    }
+    return sum;
+}
+"></pre>
+</div>
+
+<h2 id="solution">参考解答</h2>
+<div class="codeblock">
+  <div class="codebar"><span class="label">optimized.c</span><button class="copybtn">复制</button></div>
+  <pre data-code="#include &lt;stdlib.h&gt;
+
+#define N 100000
+
+long solve(int *arr, int n) {
+    int *packed = (int *)malloc((size_t)n * sizeof(int));
+    if (!packed)
+        return 0;
+
+    for (int i = 0; i &lt; n; i++)
+        packed[i] = arr[i * 16];
+
+    long s0 = 0, s1 = 0, s2 = 0, s3 = 0;
+    int i = 0;
+    for (; i &lt;= n - 4; i += 4) {
+        int v0 = packed[i + 0];
+        int v1 = packed[i + 1];
+        int v2 = packed[i + 2];
+        int v3 = packed[i + 3];
+
+        s0 += (long)(v0 &amp; 1) * v0;
+        s1 += (long)(v1 &amp; 1) * v1;
+        s2 += (long)(v2 &amp; 1) * v2;
+        s3 += (long)(v3 &amp; 1) * v3;
+    }
+
+    for (; i &lt; n; i++) {
+        int v = packed[i];
+        s0 += (long)(v &amp; 1) * v;
+    }
+
+    free(packed);
+    return s0 + s1 + s2 + s3;
+}
+"></pre>
+</div>
+
+<h2 id="report">优化报告</h2>
+<table><thead><tr><th style="width:120px">维度</th><th>内容</th></tr></thead><tbody>
+<tr><td><b>核心瓶颈</b></td><td>复合瓶颈（分支 + 缓存 + 依赖）</td></tr>
+<tr><td><b>一句话思路</b></td><td>访存跨行、分支随机、冗余依赖 —— 三处病灶需要同时处理。</td></tr>
+<tr><td><b>报告摘要</b></td><td>三个病灶逐一清除：①把 <code>arr[i*16]</code> 打包成连续数组消除跨行访问；②把 <code>if (val &amp; 1)</code> 改写成算术掩码消除分支；③删除 <code>sum + (val*0)</code> 冗余依赖并引入 4 个累加器。</td></tr>
+</tbody></table>
+
+<h3 id="r1">瓶颈定位</h3><p><strong>缓存</strong>：<code>arr[i * 16]</code> 的相邻访问间隔 64 字节，每次恰好落在一条新的缓存行上，L1 MPKI 高达 36。</p><p><strong>分支</strong>：<code>if (val &amp; 1)</code> 在随机数据上接近 50/50，Branch MPKI 达 18，每次误预测清空流水线。</p><p><strong>依赖</strong>：<code>sum = sum + (val * 0)</code> 既无意义又在累加器上制造了一次额外的串行依赖，把关键路径硬生生拉长一倍。</p><h3 id="r2">优化思路</h3><p>先把要用的数据<strong>打包</strong>到连续数组 <code>packed[i] = arr[i*16]</code>：一次 O(n) 的顺序化预处理，把跨行随机访问变成流式扫描。</p><p>把条件累加改写成 <code>s += (long)(v &amp; 1) * v</code>：<code>v &amp; 1</code> 得到 0 或 1，乘法天然实现了"条件相加"，无需任何分支。</p><p>删除 <code>val * 0</code>，并用 4 个独立累加器 + 4 路展开打破累加链。</p><h3 id="r3">关键改动</h3><p>预处理阶段把稀疏采样结果紧凑存放，后续所有访问都是 stride-1，缓存行利用率 100%。</p><p>热循环中不再有任何条件跳转，Branch MPKI 降到接近 0。</p><p>4 路展开让 4 组「与、乘、加」彼此独立，乱序核可以充分重叠。</p><h3 id="r4">为什么更快</h3><p>打包后每条缓存行承载 16 个整数，L1 MPKI 从 36 降到个位数。</p><p>分支消除后不再有流水线清空，前端可以全速供指。</p><p>依赖链被拆成 4 条，IPC 从 0.7 提升到 3 以上。</p><p>三个指标必须一起看：只修其中一项时，另外两项会成为新的瓶颈，目标仍无法达成。</p><h3 id="r5">常见误区</h3><p>只优化一处：本题刻意让三个瓶颈相当，任何单点优化都会被剩下的瓶颈顶住。</p><p>忽略 <code>val * 0</code> 看似无害：编译器在 <code>-O0</code> 或未开启优化时不会消除它，它会真实出现在热循环的关键路径上。</p><p>认为打包需要额外内存就不划算：相对于 100 轮/多次复用，这一次 O(n) 拷贝的收益远大于成本。</p>
+
+<div class="callout"><b>要点速记</b><ul style="margin:6px 0 0"><li>先打包后计算</li><li>掩码乘法替代分支</li><li>删除无意义的依赖</li></ul></div>
+<div class="callout warn"><b>常见误区与边界条件</b><ul style="margin:6px 0 0"><li>单点优化无法达成复合目标</li><li>必须三项指标同时验证</li></ul></div>
+
+<div class="pager">
+  <a href="../problems/interleaved-pointer-chasing.html"><span class="k">← 上一题</span>指针追逐：恢复内存级并行</a>
+  <a class="next" href="../problems/strided-sum-prefetch.html"><span class="k">下一题 →</span>跨步求和：用预取隐藏延迟</a>
+</div>
+</main>
+  <aside class="toc"><h4>本页目录</h4><a href="#statement">题面</a><a href="#constraints">约束</a><a href="#examples">示例</a><a href="#targets">指标目标</a><a href="#starter">起始代码</a><a href="#solution">参考解答</a><a href="#report">优化报告</a><a href="#r1">· 瓶颈定位</a><a href="#r2">· 优化思路</a><a href="#r3">· 关键改动</a><a href="#r4">· 为什么更快</a><a href="#r5">· 常见误区</a></aside>
+</div>
+<footer>
+  本站为 <a href="https://www.leetcpu.com/">leetcpu.com</a> 课程与题目的中文整理版，
+  仅用于学习交流；题目、代码版权归原站所有。内容由程序从公开页面整理并人工撰写优化报告。
+</footer>
+<script src="../assets/search.js"></script>
+<script src="../assets/app.js"></script>
+</body>
+</html>

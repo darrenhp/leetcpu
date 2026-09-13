@@ -1,0 +1,1302 @@
+[
+  {
+    "id": 1,
+    "slug": "stable-partition-branches",
+    "title": "Stable Partition for Predictable Branches",
+    "difficulty": "Easy",
+    "category": "Branch Prediction",
+    "tags": [
+      "bimodal",
+      "stable partition",
+      "amortized"
+    ],
+    "solved": false,
+    "simConfig": "Bimodal BP · 4-wide OoO · 32KB L1",
+    "estimatedTime": "~8s",
+    "description": "You must answer the same threshold query 100 times on an array of 100,000 integers.\n\nIn the baseline, each pass scans the original random-order array. Because the branch `arr[i] > 128` is nearly 50/50 on random data, the bimodal branch predictor mispredicts often.\n\nYou may preprocess the array once before the 100 passes begin. Reorder the data so the hot branch becomes easy to predict, while keeping exactly the same values and final sum as the reference implementation.",
+    "prompt": "Write `long solve(int *arr, int n)` to return the sum of all values greater than 128 over 100 full passes. You may do one up-front preprocessing step before the repeated scans.",
+    "expectedOutput": "Return one 64-bit integer equal to the reference sum over all 100 passes.",
+    "constraints": [
+      "You may preprocess the array once before the repeated queries",
+      "Must preserve all original values exactly",
+      "Output must equal the reference total across all 100 passes",
+      "Do NOT use SIMD intrinsics",
+      "No multithreading"
+    ],
+    "examples": [
+      {
+        "input": "arr = [random 100K ints, 0-255], REPEATS = 100",
+        "output": "total sum of all values > 128 across 100 passes",
+        "explanation": "A stable partition such as \"all values <= 128 first, then all values > 128\" turns a nearly random branch into two long predictable runs."
+      }
+    ],
+    "targets": [
+      {
+        "key": "branch_mpki",
+        "label": "Branch MPKI",
+        "op": "<",
+        "value": 1.5,
+        "unit": "",
+        "icon": "BP"
+      },
+      {
+        "key": "ipc",
+        "label": "IPC",
+        "op": ">",
+        "value": 2.6,
+        "unit": "",
+        "icon": "IPC"
+      }
+    ],
+    "leaderboard": [],
+    "starterCode": "#include <stdlib.h>\n\n#define N 100000\n#define REPEATS 100\n\nlong solve(int *arr, int n) {\n    long total = 0;\n    for (int r = 0; r < REPEATS; r++) {\n        for (int i = 0; i < n; i++) {\n            if (arr[i] > 128) {\n                total += arr[i];\n            }\n        }\n    }\n    return total;\n}\n",
+    "solutionCode": "#include <stdlib.h>\n\n#define N 100000\n#define REPEATS 100\n\nlong solve(int *arr, int n) {\n    int *tmp = (int*)malloc((size_t)n * sizeof(int));\n    int left = 0;\n    int right = 0;\n\n    for (int i = 0; i < n; i++)\n        if (arr[i] <= 128)\n            tmp[left++] = arr[i];\n\n    right = left;\n    for (int i = 0; i < n; i++)\n        if (arr[i] > 128)\n            tmp[right++] = arr[i];\n\n    long total = 0;\n    for (int r = 0; r < REPEATS; r++) {\n        for (int i = 0; i < n; i++) {\n            if (tmp[i] > 128) {\n                total += tmp[i];\n            }\n        }\n    }\n\n    free(tmp);\n    return total;\n}\n",
+    "lastRunMetrics": null,
+    "rawStats": "",
+    "assembly": []
+  },
+  {
+    "id": 2,
+    "slug": "matrix-multiply-tiling",
+    "title": "Matrix Multiply — Cache Tiling",
+    "difficulty": "Easy",
+    "category": "Cache Locality",
+    "tags": [
+      "L1/L2",
+      "loop tiling",
+      "transpose"
+    ],
+    "solved": false,
+    "simConfig": "TAGE BP · 4-wide OoO · 48KB L1",
+    "estimatedTime": "~10s",
+    "description": "Multiply two row-major 512×512 float matrices: `C = A × B`.\n\nThe baseline reads rows of `A` but walks down columns of `B`, which gives poor spatial locality and creates avoidable cache misses.\n\nRewrite the loop nest with blocking, transposition, or both so the inner loops read memory in a cache-friendly order.",
+    "prompt": "Write `void solve(float *A, float *B, float *C)` to compute the exact product of two row-major 512×512 matrices while improving cache locality.",
+    "expectedOutput": "After `solve` returns, `C` must contain the exact matrix product for the provided inputs.",
+    "constraints": [
+      "N = 512 (fixed)",
+      "Matrices are row-major floats",
+      "No external libraries (no BLAS)",
+      "No multithreading",
+      "SIMD allowed"
+    ],
+    "examples": [
+      {
+        "input": "A[512×512], B[512×512] (random floats)",
+        "output": "C = A × B",
+        "explanation": "Accessing B by columns causes poor locality. Transpose B or tile the loops so both operands are consumed sequentially inside the inner loops."
+      }
+    ],
+    "targets": [
+      {
+        "key": "l1_mpki",
+        "label": "L1 MPKI",
+        "op": "<",
+        "value": 5,
+        "unit": "",
+        "icon": "L1"
+      },
+      {
+        "key": "ipc",
+        "label": "IPC",
+        "op": ">",
+        "value": 2,
+        "unit": "",
+        "icon": "IPC"
+      },
+      {
+        "key": "llc_mpki",
+        "label": "LLC MPKI",
+        "op": "<",
+        "value": 1,
+        "unit": "",
+        "icon": "LLC"
+      }
+    ],
+    "leaderboard": [],
+    "starterCode": "#include <stddef.h>\n\n#define N 512\n\nvoid solve(float *A, float *B, float *C) {\n    for (int i = 0; i < N; i++)\n        for (int j = 0; j < N; j++)\n            for (int k = 0; k < N; k++)\n                C[i*N + j] += A[i*N + k] * B[k*N + j];\n}\n",
+    "solutionCode": "#include <string.h>\n#include <stddef.h>\n\n#define N    512\n#define TILE 64\n\nvoid solve(float *A, float *B, float *C) {\n    float BT[N*N];\n\n    for (int i = 0; i < N; i++)\n        for (int j = 0; j < N; j++)\n            BT[j*N + i] = B[i*N + j];\n\n    for (int ii = 0; ii < N; ii += TILE)\n    for (int jj = 0; jj < N; jj += TILE)\n    for (int kk = 0; kk < N; kk += TILE)\n        for (int i = ii; i < ii + TILE; i++)\n        for (int j = jj; j < jj + TILE; j++) {\n            float sum = C[i*N + j];\n            for (int k = kk; k < kk + TILE; k++)\n                sum += A[i*N + k] * BT[j*N + k];\n            C[i*N + j] = sum;\n        }\n}\n",
+    "lastRunMetrics": null,
+    "rawStats": "",
+    "assembly": []
+  },
+  {
+    "id": 3,
+    "slug": "reduction-tree-ilp",
+    "title": "Reduction Tree — Break Dependency Chains",
+    "difficulty": "Medium",
+    "category": "ILP / Pipeline",
+    "tags": [
+      "OoO",
+      "unroll",
+      "multiple accumulators"
+    ],
+    "solved": false,
+    "simConfig": "TAGE · 8-wide OoO · ROB=512",
+    "estimatedTime": "~9s",
+    "description": "Sum 100,000 floating-point values.\n\nThe baseline uses one running accumulator, so every addition depends on the previous one. That long dependency chain prevents the out-of-order core from overlapping many adds.\n\nRestructure the reduction to create independent work, for example with multiple accumulators and loop unrolling, while staying within the allowed floating-point tolerance.",
+    "prompt": "Write `void solve(float *arr, float *out)` so `out[0]` becomes the sum of 100,000 floats, using a loop structure that exposes more instruction-level parallelism than a single running accumulator.",
+    "expectedOutput": "`out[0]` must match the reference reduction within a tolerance of 1e-4.",
+    "constraints": [
+      "Result must match the reference within fp tolerance 1e-4",
+      "No SIMD intrinsics",
+      "No multithreading",
+      "You may unroll and reorder additions"
+    ],
+    "examples": [
+      {
+        "input": "arr[100000] of random floats",
+        "output": "sum(arr[i])",
+        "explanation": "Several partial sums let the CPU work on multiple additions at once instead of waiting for one long dependency chain."
+      }
+    ],
+    "targets": [
+      {
+        "key": "ipc",
+        "label": "IPC",
+        "op": ">",
+        "value": 3.5,
+        "unit": "",
+        "icon": "IPC"
+      },
+      {
+        "key": "branch_mpki",
+        "label": "Branch MPKI",
+        "op": "<",
+        "value": 0.5,
+        "unit": "",
+        "icon": "BP"
+      }
+    ],
+    "leaderboard": [],
+    "starterCode": "#define N 100000\n\nvoid solve(float *arr, float *out) {\n    float acc = 0.0f;\n    for (int i = 0; i < N; i++) {\n        acc += arr[i];\n    }\n    out[0] = acc;\n}\n",
+    "solutionCode": "#define N 100000\n\nvoid solve(float *arr, float *out) {\n    float acc0 = 0.0f, acc1 = 0.0f, acc2 = 0.0f, acc3 = 0.0f;\n    int i = 0;\n\n    for (; i <= N - 4; i += 4) {\n        acc0 += arr[i + 0];\n        acc1 += arr[i + 1];\n        acc2 += arr[i + 2];\n        acc3 += arr[i + 3];\n    }\n\n    for (; i < N; i++)\n        acc0 += arr[i];\n\n    out[0] = (acc0 + acc1) + (acc2 + acc3);\n}\n",
+    "lastRunMetrics": null,
+    "rawStats": "",
+    "assembly": []
+  },
+  {
+    "id": 4,
+    "slug": "interleaved-pointer-chasing",
+    "title": "Pointer Chasing — Recover Memory Parallelism",
+    "difficulty": "Medium",
+    "category": "Memory Parallelism",
+    "tags": [
+      "MLP",
+      "linked list",
+      "latency hiding"
+    ],
+    "solved": false,
+    "simConfig": "IP-stride prefetch · 16MB LLC",
+    "estimatedTime": "~12s",
+    "description": "You must sum the values stored in 8 independent linked lists, each containing 125,000 nodes.\n\nThe baseline finishes one list before moving to the next. That creates one long chain of dependent cache misses, so the CPU often sits idle waiting for memory.\n\nChange the traversal order so misses from different lists can overlap and the core can exploit more memory-level parallelism.",
+    "prompt": "Write `long solve(Node **heads, int num_lists)` to visit every node exactly once and return the total sum, while interleaving work across lists to expose independent memory misses.",
+    "expectedOutput": "Return one 64-bit integer equal to the sum of all node values across all input lists.",
+    "constraints": [
+      "Input is delivered as 8 linked-list heads",
+      "You must process every node exactly once",
+      "No multithreading",
+      "You may change traversal order across lists"
+    ],
+    "examples": [
+      {
+        "input": "heads[8] where each head points to a 125K-node list",
+        "output": "sum of all node values",
+        "explanation": "Advancing several lists in round-robin fashion exposes multiple independent miss streams instead of only one."
+      }
+    ],
+    "targets": [
+      {
+        "key": "llc_mpki",
+        "label": "LLC MPKI",
+        "op": "<",
+        "value": 2,
+        "unit": "",
+        "icon": "LLC"
+      },
+      {
+        "key": "ipc",
+        "label": "IPC",
+        "op": ">",
+        "value": 1.8,
+        "unit": "",
+        "icon": "IPC"
+      },
+      {
+        "key": "l1_mpki",
+        "label": "L1 MPKI",
+        "op": "<",
+        "value": 8,
+        "unit": "",
+        "icon": "L1"
+      }
+    ],
+    "leaderboard": [],
+    "starterCode": "typedef struct Node {\n    int val;\n    struct Node *next;\n} Node;\n\nlong solve(Node **heads, int num_lists) {\n    long sum = 0;\n    for (int i = 0; i < num_lists; i++) {\n        for (Node *p = heads[i]; p; p = p->next)\n            sum += p->val;\n    }\n    return sum;\n}\n",
+    "solutionCode": "typedef struct Node {\n    int val;\n    struct Node *next;\n} Node;\n\nlong solve(Node **heads, int num_lists) {\n    long sum = 0;\n    Node *active[8];\n\n    for (int i = 0; i < num_lists; i++)\n        active[i] = heads[i];\n\n    int remaining = num_lists;\n    while (remaining > 0) {\n        remaining = 0;\n        for (int i = 0; i < num_lists; i++) {\n            Node *p = active[i];\n            if (!p)\n                continue;\n            sum += p->val;\n            active[i] = p->next;\n            if (active[i])\n                remaining++;\n        }\n    }\n\n    return sum;\n}\n",
+    "lastRunMetrics": null,
+    "rawStats": "",
+    "assembly": []
+  },
+  {
+    "id": 5,
+    "slug": "bottleneck-triage",
+    "title": "Bottleneck Triage — Diagnose and Fix",
+    "difficulty": "Hard",
+    "category": "Diagnosis",
+    "tags": [
+      "counters",
+      "branch",
+      "cache",
+      "ILP"
+    ],
+    "solved": false,
+    "simConfig": "Perceptron BP · realistic config",
+    "estimatedTime": "~11s",
+    "description": "This workload is slow for several independent reasons.\n\nBaseline metrics:\n• IPC: 0.7  (target: > 3.0)\n• L1 MPKI: 36.0  (target: < 4.0)\n• Branch MPKI: 18.0  (target: < 2.0)\n\nThe starter code combines three different bottlenecks: poor locality, an unpredictable branch, and unnecessary dependency pressure. Use the counters, source, and assembly to identify those issues and rewrite the loop so all targets are met at the same time.",
+    "prompt": "Rewrite `long solve(int *arr, int n)` so it returns the correct total while fixing the branch, cache-locality, and dependency problems in the baseline.",
+    "expectedOutput": "Return the exact reference total and satisfy every published performance target in the same run.",
+    "constraints": [
+      "Output must match the reference total",
+      "N = 100000 · fixed seed",
+      "All three targets must be met simultaneously",
+      "SIMD allowed",
+      "You may change traversal order and control flow"
+    ],
+    "examples": [],
+    "targets": [
+      {
+        "key": "ipc",
+        "label": "IPC",
+        "op": ">",
+        "value": 3,
+        "unit": "",
+        "icon": "IPC"
+      },
+      {
+        "key": "l1_mpki",
+        "label": "L1 MPKI",
+        "op": "<",
+        "value": 4,
+        "unit": "",
+        "icon": "L1"
+      },
+      {
+        "key": "branch_mpki",
+        "label": "Branch MPKI",
+        "op": "<",
+        "value": 2,
+        "unit": "",
+        "icon": "BP"
+      }
+    ],
+    "leaderboard": [],
+    "starterCode": "#define N 100000\n\nlong solve(int *arr, int n) {\n    long sum = 0;\n    for (int i = 0; i < n; i++) {\n        int val = arr[i * 16];          /* bad spatial locality */\n        if (val & 1)                    /* branch near 50/50 */\n            sum += val;\n        sum = sum + (val * 0);          /* useless dependency in hot loop */\n    }\n    return sum;\n}\n",
+    "solutionCode": "#include <stdlib.h>\n\n#define N 100000\n\nlong solve(int *arr, int n) {\n    int *packed = (int *)malloc((size_t)n * sizeof(int));\n    if (!packed)\n        return 0;\n\n    for (int i = 0; i < n; i++)\n        packed[i] = arr[i * 16];\n\n    long s0 = 0, s1 = 0, s2 = 0, s3 = 0;\n    int i = 0;\n    for (; i <= n - 4; i += 4) {\n        int v0 = packed[i + 0];\n        int v1 = packed[i + 1];\n        int v2 = packed[i + 2];\n        int v3 = packed[i + 3];\n\n        s0 += (long)(v0 & 1) * v0;\n        s1 += (long)(v1 & 1) * v1;\n        s2 += (long)(v2 & 1) * v2;\n        s3 += (long)(v3 & 1) * v3;\n    }\n\n    for (; i < n; i++) {\n        int v = packed[i];\n        s0 += (long)(v & 1) * v;\n    }\n\n    free(packed);\n    return s0 + s1 + s2 + s3;\n}\n",
+    "lastRunMetrics": null,
+    "rawStats": "",
+    "assembly": []
+  },
+  {
+    "id": 6,
+    "slug": "strided-sum-prefetch",
+    "title": "Strided Sum — Hide Latency with Prefetch",
+    "difficulty": "Medium",
+    "category": "Memory Parallelism",
+    "tags": [
+      "prefetch",
+      "stride-16",
+      "latency hiding"
+    ],
+    "solved": false,
+    "simConfig": "ChampSim · stride prefetch · 4-wide OoO",
+    "estimatedTime": "~11s",
+    "description": "You must sum one integer from every 64-byte region of a large array.\n\nThe baseline reads `arr[i * 16]`, so each iteration pulls from a new cache line. That pattern easily turns into a latency-bound loop if the core waits for one miss at a time.\n\nUse techniques such as software prefetching, unrolling, or multiple accumulators so several memory accesses can be in flight together.",
+    "prompt": "Write `long solve(int *arr, int n)` to return the sum of `arr[i * 16]` for `i = 0..n-1`, while restructuring the loop to expose more memory-level parallelism.",
+    "expectedOutput": "Return the exact 64-bit sum of the stride-16 stream.",
+    "constraints": [
+      "Input allocation contains at least n * 16 integers",
+      "You must read arr[i * 16] exactly once per i",
+      "No multithreading",
+      "No SIMD intrinsics",
+      "__builtin_prefetch is allowed"
+    ],
+    "examples": [
+      {
+        "input": "arr = random ints, n = 100000, stride = 16",
+        "output": "sum(arr[i * 16])",
+        "explanation": "Prefetching future cache lines and keeping several accumulators live helps overlap independent misses."
+      }
+    ],
+    "targets": [
+      {
+        "key": "ipc",
+        "label": "IPC",
+        "op": ">",
+        "value": 1.9,
+        "unit": "",
+        "icon": "IPC"
+      },
+      {
+        "key": "llc_mpki",
+        "label": "LLC MPKI",
+        "op": "<",
+        "value": 1.5,
+        "unit": "",
+        "icon": "LLC"
+      },
+      {
+        "key": "l2_mpki",
+        "label": "L2 MPKI",
+        "op": "<",
+        "value": 3,
+        "unit": "",
+        "icon": "L1"
+      }
+    ],
+    "leaderboard": [],
+    "starterCode": "#define STRIDE 16\n\nlong solve(int *arr, int n) {\n    long total = 0;\n    for (int i = 0; i < n; i++) {\n        total += arr[i * STRIDE];\n    }\n    return total;\n}\n",
+    "solutionCode": "#define STRIDE 16\n#define PREFETCH_DISTANCE 32\n\nlong solve(int *arr, int n) {\n    long s0 = 0, s1 = 0, s2 = 0, s3 = 0;\n    int i = 0;\n\n    for (; i <= n - 4; i += 4) {\n        if (i + PREFETCH_DISTANCE < n)\n            __builtin_prefetch(&arr[(i + PREFETCH_DISTANCE) * STRIDE], 0, 1);\n\n        s0 += arr[(i + 0) * STRIDE];\n        s1 += arr[(i + 1) * STRIDE];\n        s2 += arr[(i + 2) * STRIDE];\n        s3 += arr[(i + 3) * STRIDE];\n    }\n\n    for (; i < n; i++)\n        s0 += arr[i * STRIDE];\n\n    return s0 + s1 + s2 + s3;\n}\n",
+    "lastRunMetrics": null,
+    "rawStats": "",
+    "assembly": []
+  },
+  {
+    "id": 7,
+    "slug": "bitset-popcount-throughput",
+    "title": "Bitset Scan — Turn Scalar Loops into Throughput",
+    "difficulty": "Easy",
+    "category": "ILP / Pipeline",
+    "tags": [
+      "popcount",
+      "bitset",
+      "throughput"
+    ],
+    "solved": false,
+    "simConfig": "ChampSim · wide integer backend · 8-wide OoO",
+    "estimatedTime": "~7s",
+    "description": "You must count all set bits in a large bitmap.\n\nThe baseline examines all 64 bit positions of every word with a scalar inner loop. That wastes instructions and underuses the CPU's dedicated population-count hardware.\n\nReplace the bit-by-bit scan with a throughput-friendly approach that maps well to popcount instructions.",
+    "prompt": "Write `unsigned long long solve(unsigned long long *bits, int words)` to return the total number of set bits across `words` 64-bit words.",
+    "expectedOutput": "Return the exact population count as an unsigned 64-bit integer.",
+    "constraints": [
+      "words = 65536",
+      "No multithreading",
+      "Compiler builtins such as __builtin_popcountll are allowed",
+      "Result must be exact"
+    ],
+    "examples": [
+      {
+        "input": "bits = [0xF0, 0x3, ...]",
+        "output": "sum(popcount(bits[i]))",
+        "explanation": "A dedicated popcount operation replaces 64 scalar shifts and masks per word."
+      }
+    ],
+    "targets": [
+      {
+        "key": "ipc",
+        "label": "IPC",
+        "op": ">",
+        "value": 3.8,
+        "unit": "",
+        "icon": "IPC"
+      },
+      {
+        "key": "branch_mpki",
+        "label": "Branch MPKI",
+        "op": "<",
+        "value": 0.5,
+        "unit": "",
+        "icon": "BP"
+      }
+    ],
+    "leaderboard": [],
+    "starterCode": "unsigned long long solve(unsigned long long *bits, int words) {\n    unsigned long long total = 0;\n    for (int i = 0; i < words; i++) {\n        unsigned long long word = bits[i];\n        for (int b = 0; b < 64; b++) {\n            total += (word >> b) & 1ULL;\n        }\n    }\n    return total;\n}\n",
+    "solutionCode": "unsigned long long solve(unsigned long long *bits, int words) {\n    unsigned long long total = 0;\n    int i = 0;\n\n    for (; i <= words - 4; i += 4) {\n        total += (unsigned long long)__builtin_popcountll(bits[i + 0]);\n        total += (unsigned long long)__builtin_popcountll(bits[i + 1]);\n        total += (unsigned long long)__builtin_popcountll(bits[i + 2]);\n        total += (unsigned long long)__builtin_popcountll(bits[i + 3]);\n    }\n\n    for (; i < words; i++)\n        total += (unsigned long long)__builtin_popcountll(bits[i]);\n\n    return total;\n}\n",
+    "lastRunMetrics": null,
+    "rawStats": "",
+    "assembly": []
+  },
+  {
+    "id": 8,
+    "slug": "particle-struct-repacking",
+    "title": "Particle Score — Repack Structs for Bandwidth",
+    "difficulty": "Medium",
+    "category": "Cache Locality",
+    "tags": [
+      "AoS",
+      "SoA",
+      "bandwidth"
+    ],
+    "solved": false,
+    "simConfig": "ChampSim · 48KB L1D · bandwidth study",
+    "estimatedTime": "~10s",
+    "description": "Each particle stores four float fields in an array-of-structs layout. The computation only needs the expression `x*w + y*z` for every particle, but the baseline processes the array in a way that leaves bandwidth and instruction throughput on the table.\n\nRepack the hot fields into a denser layout, or otherwise restructure the loop, so the CPU can stream data and arithmetic more efficiently.",
+    "prompt": "Write `float solve(Particle *p, int n)` to return `sum(p[i].x * p[i].w + p[i].y * p[i].z)` for all `n` particles.",
+    "expectedOutput": "Return the floating-point total within an absolute tolerance of 1e-4.",
+    "constraints": [
+      "n = 200000",
+      "No multithreading",
+      "SIMD is allowed",
+      "Do not modify the particle values"
+    ],
+    "examples": [
+      {
+        "input": "Particle {x, y, z, w} repeated 200K times",
+        "output": "sum(x*w + y*z)",
+        "explanation": "Copying hot fields into dense arrays can reduce wasted bandwidth and expose cleaner inner loops."
+      }
+    ],
+    "targets": [
+      {
+        "key": "ipc",
+        "label": "IPC",
+        "op": ">",
+        "value": 2.6,
+        "unit": "",
+        "icon": "IPC"
+      },
+      {
+        "key": "l1_mpki",
+        "label": "L1 MPKI",
+        "op": "<",
+        "value": 4,
+        "unit": "",
+        "icon": "L1"
+      }
+    ],
+    "leaderboard": [],
+    "starterCode": "typedef struct Particle {\n    float x, y, z, w;\n} Particle;\n\nfloat solve(Particle *p, int n) {\n    float total = 0.0f;\n    for (int i = 0; i < n; i++) {\n        total += p[i].x * p[i].w + p[i].y * p[i].z;\n    }\n    return total;\n}\n",
+    "solutionCode": "#include <stdlib.h>\n\ntypedef struct Particle {\n    float x, y, z, w;\n} Particle;\n\nfloat solve(Particle *p, int n) {\n    float *xs = (float *)malloc((size_t)n * sizeof(float));\n    float *ys = (float *)malloc((size_t)n * sizeof(float));\n    float *zs = (float *)malloc((size_t)n * sizeof(float));\n    float *ws = (float *)malloc((size_t)n * sizeof(float));\n    if (!xs || !ys || !zs || !ws)\n        return 0.0f;\n\n    for (int i = 0; i < n; i++) {\n        xs[i] = p[i].x;\n        ys[i] = p[i].y;\n        zs[i] = p[i].z;\n        ws[i] = p[i].w;\n    }\n\n    float a0 = 0.0f, a1 = 0.0f, a2 = 0.0f, a3 = 0.0f;\n    int i = 0;\n    for (; i <= n - 4; i += 4) {\n        a0 += xs[i + 0] * ws[i + 0] + ys[i + 0] * zs[i + 0];\n        a1 += xs[i + 1] * ws[i + 1] + ys[i + 1] * zs[i + 1];\n        a2 += xs[i + 2] * ws[i + 2] + ys[i + 2] * zs[i + 2];\n        a3 += xs[i + 3] * ws[i + 3] + ys[i + 3] * zs[i + 3];\n    }\n\n    for (; i < n; i++)\n        a0 += xs[i] * ws[i] + ys[i] * zs[i];\n\n    free(xs);\n    free(ys);\n    free(zs);\n    free(ws);\n    return a0 + a1 + a2 + a3;\n}\n",
+    "lastRunMetrics": null,
+    "rawStats": "",
+    "assembly": []
+  },
+  {
+    "id": 9,
+    "slug": "image-blur-tiling",
+    "title": "Image Blur — Tile the Working Set",
+    "difficulty": "Medium",
+    "category": "Cache Locality",
+    "tags": [
+      "stencil",
+      "tiling",
+      "row reuse"
+    ],
+    "solved": false,
+    "simConfig": "ChampSim · 32KB L1D · stencil trace",
+    "estimatedTime": "~9s",
+    "description": "Apply a horizontal 3-tap blur to a 512×512 image.\n\nThe arithmetic per pixel is small, so performance depends mostly on keeping rows hot in cache and writing the output sequentially.\n\nRewrite the starter code with pointer arithmetic, tiling, unrolling, or similar loop improvements so the working set stays cache-friendly.",
+    "prompt": "Write `void solve(float *in, float *out, int width, int height)` so each non-edge output pixel is the average of its left, center, and right neighbors, while edge pixels are copied unchanged.",
+    "expectedOutput": "The checksum of the output image must match the reference within an absolute tolerance of 1e-4.",
+    "constraints": [
+      "width = height = 512",
+      "Edge pixels must be copied without modification",
+      "No multithreading",
+      "SIMD allowed"
+    ],
+    "examples": [
+      {
+        "input": "512x512 random float image",
+        "output": "3-tap horizontal blur with copied edges",
+        "explanation": "Tiling by rows or blocks helps the CPU reuse nearby pixels and write outputs sequentially."
+      }
+    ],
+    "targets": [
+      {
+        "key": "ipc",
+        "label": "IPC",
+        "op": ">",
+        "value": 2.4,
+        "unit": "",
+        "icon": "IPC"
+      },
+      {
+        "key": "l1_mpki",
+        "label": "L1 MPKI",
+        "op": "<",
+        "value": 3.5,
+        "unit": "",
+        "icon": "L1"
+      },
+      {
+        "key": "llc_mpki",
+        "label": "LLC MPKI",
+        "op": "<",
+        "value": 0.6,
+        "unit": "",
+        "icon": "LLC"
+      }
+    ],
+    "leaderboard": [],
+    "starterCode": "void solve(float *in, float *out, int width, int height) {\n    for (int y = 0; y < height; y++) {\n        int row = y * width;\n        out[row] = in[row];\n        for (int x = 1; x < width - 1; x++) {\n            int idx = row + x;\n            out[idx] = (in[idx - 1] + in[idx] + in[idx + 1]) * (1.0f / 3.0f);\n        }\n        out[row + width - 1] = in[row + width - 1];\n    }\n}\n",
+    "solutionCode": "#define TILE_ROWS 32\n\nvoid solve(float *in, float *out, int width, int height) {\n    for (int y0 = 0; y0 < height; y0 += TILE_ROWS) {\n        int y_end = y0 + TILE_ROWS;\n        if (y_end > height)\n            y_end = height;\n\n        for (int y = y0; y < y_end; y++) {\n            int row = y * width;\n            float *src = in + row;\n            float *dst = out + row;\n\n            dst[0] = src[0];\n\n            int x = 1;\n            for (; x <= width - 5; x += 4) {\n                dst[x + 0] = (src[x - 1] + src[x + 0] + src[x + 1]) * (1.0f / 3.0f);\n                dst[x + 1] = (src[x + 0] + src[x + 1] + src[x + 2]) * (1.0f / 3.0f);\n                dst[x + 2] = (src[x + 1] + src[x + 2] + src[x + 3]) * (1.0f / 3.0f);\n                dst[x + 3] = (src[x + 2] + src[x + 3] + src[x + 4]) * (1.0f / 3.0f);\n            }\n\n            for (; x < width - 1; x++)\n                dst[x] = (src[x - 1] + src[x] + src[x + 1]) * (1.0f / 3.0f);\n\n            dst[width - 1] = src[width - 1];\n        }\n    }\n}\n",
+    "lastRunMetrics": null,
+    "rawStats": "",
+    "assembly": []
+  },
+  {
+    "id": 10,
+    "slug": "branchless-score-window",
+    "title": "Score Window — Remove Unpredictable Branches",
+    "difficulty": "Easy",
+    "category": "Branch Prediction",
+    "tags": [
+      "branchless",
+      "range check",
+      "hot loop"
+    ],
+    "solved": false,
+    "simConfig": "ChampSim · TAGE-SC-L · branch study",
+    "estimatedTime": "~7s",
+    "description": "A scoring loop must add only the values inside a target range.\n\nThe baseline uses two nested branches per element. When the input scores are spread roughly uniformly, those branches become hard to predict and hurt front-end throughput.\n\nRewrite the loop so the result stays exact but the hot path becomes much more predictable, ideally branchless.",
+    "prompt": "Write `long solve(int *scores, int n)` to return the sum of every `scores[i]` in the inclusive range [50, 200].",
+    "expectedOutput": "Return the exact 64-bit sum of all scores inside the window.",
+    "constraints": [
+      "scores[i] are integers in the range 0..255",
+      "No multithreading",
+      "SIMD allowed",
+      "Result must be exact"
+    ],
+    "examples": [
+      {
+        "input": "scores = random ints 0..255",
+        "output": "sum(scores[i] where 50 <= scores[i] <= 200)",
+        "explanation": "Branchless range checks keep the hot loop predictable even when valid scores are not clustered."
+      }
+    ],
+    "targets": [
+      {
+        "key": "ipc",
+        "label": "IPC",
+        "op": ">",
+        "value": 3,
+        "unit": "",
+        "icon": "IPC"
+      },
+      {
+        "key": "branch_mpki",
+        "label": "Branch MPKI",
+        "op": "<",
+        "value": 1,
+        "unit": "",
+        "icon": "BP"
+      }
+    ],
+    "leaderboard": [],
+    "starterCode": "long solve(int *scores, int n) {\n    long total = 0;\n    for (int i = 0; i < n; i++) {\n        if (scores[i] >= 50) {\n            if (scores[i] <= 200)\n                total += scores[i];\n        }\n    }\n    return total;\n}\n",
+    "solutionCode": "long solve(int *scores, int n) {\n    long total = 0;\n    for (int i = 0; i < n; i++) {\n        unsigned int window = (unsigned int)(scores[i] - 50);\n        total += (long)(window <= 150U) * scores[i];\n    }\n    return total;\n}\n",
+    "lastRunMetrics": null,
+    "rawStats": "",
+    "assembly": []
+  },
+  {
+    "id": 11,
+    "slug": "ece-jacobi-stencil-lab",
+    "title": "ECE Lab — 2D Jacobi Stencil Cache Blocking",
+    "difficulty": "Medium",
+    "category": "Cache Locality",
+    "tags": [
+      "stencil",
+      "blocking",
+      "row reuse",
+      "ece-lab"
+    ],
+    "solved": false,
+    "simConfig": "ChampSim · 4-wide OoO · 32KB L1D · classroom trace",
+    "estimatedTime": "~12s",
+    "description": "This challenge mirrors a classic cache-optimization lab from upper-level computer architecture courses.\n\nYou must perform one Jacobi sweep on a 1024×1024 grid. The baseline is correct, but it streams through a large 2D array with limited attention to cache reuse in the hot loop.\n\nRewrite the kernel so it produces the same numerical result while improving locality in L1 and L2. Row blocking, pointer hoisting, and light unrolling are all valid approaches.",
+    "prompt": "Write `void solve(const float *in, float *out, int n)` to compute one 5-point Jacobi update on an `n × n` row-major grid. Copy boundary cells unchanged, and set each interior cell to `0.5*center + 0.125*(north + south + west + east)` without changing the final checksum.",
+    "expectedOutput": "The harness prints a single floating-point checksum of the output grid. Your result must match the reference within an absolute tolerance of 1e-4.",
+    "constraints": [
+      "n = 1024 in the graded harness",
+      "Boundary cells must be copied exactly from the input",
+      "Interior update formula must remain numerically equivalent",
+      "No multithreading",
+      "SIMD allowed, but not required"
+    ],
+    "examples": [
+      {
+        "input": "grid[1024×1024] with deterministic lab initialization",
+        "output": "checksum(out) after one Jacobi sweep",
+        "explanation": "The optimization target is not a different algorithm. You are improving loop structure and locality while preserving the exact stencil semantics."
+      }
+    ],
+    "targets": [
+      {
+        "key": "ipc",
+        "label": "IPC",
+        "op": ">",
+        "value": 2.4,
+        "unit": "",
+        "icon": "IPC"
+      },
+      {
+        "key": "l1_mpki",
+        "label": "L1 MPKI",
+        "op": "<",
+        "value": 4.5,
+        "unit": "",
+        "icon": "L1"
+      },
+      {
+        "key": "llc_mpki",
+        "label": "LLC MPKI",
+        "op": "<",
+        "value": 0.8,
+        "unit": "",
+        "icon": "LLC"
+      }
+    ],
+    "leaderboard": [],
+    "starterCode": "void solve(const float *in, float *out, int n) {\n    for (int y = 0; y < n; y++) {\n        int row = y * n;\n        if (y == 0 || y == n - 1) {\n            for (int x = 0; x < n; x++)\n                out[row + x] = in[row + x];\n            continue;\n        }\n\n        out[row] = in[row];\n        for (int x = 1; x < n - 1; x++) {\n            int idx = row + x;\n            out[idx] = 0.5f * in[idx]\n                     + 0.125f * (in[idx - n] + in[idx + n] + in[idx - 1] + in[idx + 1]);\n        }\n        out[row + n - 1] = in[row + n - 1];\n    }\n}\n",
+    "solutionCode": "#define TILE_ROWS 32\n\nvoid solve(const float *in, float *out, int n) {\n    for (int x = 0; x < n; x++) {\n        out[x] = in[x];\n        out[(n - 1) * n + x] = in[(n - 1) * n + x];\n    }\n\n    for (int y0 = 1; y0 < n - 1; y0 += TILE_ROWS) {\n        int y_end = y0 + TILE_ROWS;\n        if (y_end > n - 1)\n            y_end = n - 1;\n\n        for (int y = y0; y < y_end; y++) {\n            const float *north = in + (y - 1) * n;\n            const float *center = in + y * n;\n            const float *south = in + (y + 1) * n;\n            float *dst = out + y * n;\n\n            dst[0] = center[0];\n\n            int x = 1;\n            for (; x <= n - 5; x += 4) {\n                dst[x + 0] = 0.5f * center[x + 0] + 0.125f * (north[x + 0] + south[x + 0] + center[x - 1] + center[x + 1]);\n                dst[x + 1] = 0.5f * center[x + 1] + 0.125f * (north[x + 1] + south[x + 1] + center[x + 0] + center[x + 2]);\n                dst[x + 2] = 0.5f * center[x + 2] + 0.125f * (north[x + 2] + south[x + 2] + center[x + 1] + center[x + 3]);\n                dst[x + 3] = 0.5f * center[x + 3] + 0.125f * (north[x + 3] + south[x + 3] + center[x + 2] + center[x + 4]);\n            }\n\n            for (; x < n - 1; x++)\n                dst[x] = 0.5f * center[x] + 0.125f * (north[x] + south[x] + center[x - 1] + center[x + 1]);\n\n            dst[n - 1] = center[n - 1];\n        }\n    }\n}\n",
+    "lastRunMetrics": null,
+    "rawStats": "",
+    "assembly": []
+  },
+  {
+    "id": 12,
+    "slug": "irregular-gather-prefetch",
+    "title": "Irregular Gather — Prefetch Ahead of Random Access",
+    "difficulty": "Medium",
+    "category": "Memory Parallelism",
+    "tags": [
+      "prefetch",
+      "gather",
+      "latency hiding",
+      "random access"
+    ],
+    "solved": false,
+    "simConfig": "GShare BP · 4-wide OoO · IP-stride prefetch",
+    "estimatedTime": "~10s",
+    "description": "Sum 128K integers accessed in a random order defined by an index permutation.\n\nThe baseline walks `indices[]` sequentially and fetches `data[indices[i]]` on demand. Because each index points to a random location in a 512 KB data array, every iteration triggers an L1 miss — and the CPU stalls waiting for each one before it can compute the next address.\n\nAdd software prefetch hints so the CPU requests the next cache line before it is needed, allowing misses to overlap with useful work.\n\nThe key metric is L1D average miss latency. On the baseline it will be 45–55 cycles because the CPU sits idle. With effective prefetching it should drop below 25 cycles as future accesses are already in flight.",
+    "prompt": "Write `long solve(const int *data, const int *indices, int n)` to return the sum of `data[indices[i]]` for all `i`, using `__builtin_prefetch` to hide the latency of random memory accesses.",
+    "expectedOutput": "Return the exact 64-bit sum of all gathered values.",
+    "constraints": [
+      "n = 131072 (128K elements, fixed)",
+      "indices[] is a permutation of 0..n-1 — every element accessed exactly once",
+      "__builtin_prefetch is allowed and required to meet targets",
+      "No multithreading",
+      "No SIMD intrinsics",
+      "Result must be exact"
+    ],
+    "examples": [
+      {
+        "input": "data[128K] of random ints 1..256, indices[128K] = random permutation",
+        "output": "sum(data[indices[i]]) for i = 0..n-1",
+        "explanation": "__builtin_prefetch(&data[indices[i + D]], 0, 1) with distance D=16–32 tells the CPU to fetch the cache line D iterations ahead, so it arrives before the load instruction needs it."
+      }
+    ],
+    "targets": [
+      {
+        "key": "l1d_avg_latency",
+        "label": "L1D Avg Miss Latency",
+        "op": "<",
+        "value": 25,
+        "unit": " cyc",
+        "icon": "L1"
+      },
+      {
+        "key": "ipc",
+        "label": "IPC",
+        "op": ">",
+        "value": 2,
+        "unit": "",
+        "icon": "IPC"
+      }
+    ],
+    "leaderboard": [],
+    "starterCode": "long solve(const int *data, const int *indices, int n) {\n    long sum = 0;\n    for (int i = 0; i < n; i++) {\n        sum += data[indices[i]];\n    }\n    return sum;\n}\n",
+    "solutionCode": "#define PREFETCH_DIST 24\n\nlong solve(const int *data, const int *indices, int n) {\n    long sum = 0;\n    for (int i = 0; i < n; i++) {\n        if (i + PREFETCH_DIST < n)\n            __builtin_prefetch(&data[indices[i + PREFETCH_DIST]], 0, 1);\n        sum += data[indices[i]];\n    }\n    return sum;\n}\n",
+    "lastRunMetrics": null,
+    "rawStats": "",
+    "assembly": []
+  },
+  {
+    "id": 13,
+    "slug": "histogram-dependency-chains",
+    "title": "Histogram — Break Write Dependency Chains",
+    "difficulty": "Medium",
+    "category": "ILP / Pipeline",
+    "tags": [
+      "histogram",
+      "dependency chains",
+      "write conflicts",
+      "interleaving"
+    ],
+    "solved": false,
+    "simConfig": "GShare BP · 4-wide OoO · 32KB L1",
+    "estimatedTime": "~9s",
+    "description": "Fill a 256-bucket histogram from 2 million random bytes.\n\nThe baseline does `hist[arr[i]]++` on every element. When two consecutive elements share the same bucket, the second increment must wait for the first to complete — a write-after-write dependency chain that stalls the pipeline.\n\nBreak those chains by computing several independent partial histograms in parallel and merging them at the end. With 4 interleaved histograms, the probability that two consecutive updates collide on the same bucket drops dramatically, so the CPU can retire multiple updates per cycle.",
+    "prompt": "Write `void solve(const unsigned char *arr, int n, unsigned int *hist)` to count occurrences of each byte value 0–255, with hist[] zeroed on entry, using interleaved partial histograms to reduce write dependency stalls.",
+    "expectedOutput": "hist[i] must equal the exact count of byte value i in arr[].",
+    "constraints": [
+      "n = 2,000,000 (fixed)",
+      "hist[] is zeroed before your function is called",
+      "hist[i] must match the reference count exactly",
+      "No multithreading",
+      "SIMD allowed"
+    ],
+    "examples": [
+      {
+        "input": "arr[2M] of random bytes 0–255, hist[256] zeroed",
+        "output": "hist[i] = count of value i in arr",
+        "explanation": "Four interleaved histograms h0–h3 each accumulate every 4th element. Any two consecutive updates go to different histograms, eliminating write-after-write stalls."
+      }
+    ],
+    "targets": [
+      {
+        "key": "ipc",
+        "label": "IPC",
+        "op": ">",
+        "value": 2.5,
+        "unit": "",
+        "icon": "IPC"
+      },
+      {
+        "key": "l1d_avg_latency",
+        "label": "L1D Avg Latency",
+        "op": "<",
+        "value": 15,
+        "unit": " cyc",
+        "icon": "L1"
+      }
+    ],
+    "leaderboard": [],
+    "starterCode": "void solve(const unsigned char *arr, int n, unsigned int *hist) {\n    for (int i = 0; i < n; i++)\n        hist[arr[i]]++;\n}\n",
+    "solutionCode": "#include <string.h>\n\nvoid solve(const unsigned char *arr, int n, unsigned int *hist) {\n    unsigned int h0[256] = {0};\n    unsigned int h1[256] = {0};\n    unsigned int h2[256] = {0};\n    unsigned int h3[256] = {0};\n\n    int i = 0;\n    for (; i <= n - 4; i += 4) {\n        h0[arr[i + 0]]++;\n        h1[arr[i + 1]]++;\n        h2[arr[i + 2]]++;\n        h3[arr[i + 3]]++;\n    }\n    for (; i < n; i++) h0[arr[i]]++;\n\n    for (int j = 0; j < 256; j++)\n        hist[j] = h0[j] + h1[j] + h2[j] + h3[j];\n}\n",
+    "lastRunMetrics": null,
+    "rawStats": "",
+    "assembly": []
+  },
+  {
+    "id": 14,
+    "slug": "3d-loop-interchange",
+    "title": "3D Array — Fix Loop Order for Sequential Access",
+    "difficulty": "Easy",
+    "category": "Cache Locality",
+    "tags": [
+      "loop interchange",
+      "3D array",
+      "stride",
+      "spatial locality"
+    ],
+    "solved": false,
+    "simConfig": "GShare BP · 4-wide OoO · 32KB L1",
+    "estimatedTime": "~8s",
+    "description": "Sum all elements of a 64×64×64 integer array.\n\nThe array is stored in row-major order: element `[i][j][k]` lives at offset `i*64*64 + j*64 + k`. When k varies fastest in the inner loop, consecutive accesses are adjacent in memory — one cache line covers 16 integers.\n\nThe baseline iterates with i in the inner loop instead, so each step jumps by 64×64 = 4096 integers (16 KB), pulling a new cache line on every iteration.\n\nSimply reorder the three loops so k varies fastest. This turns 4096-element strides into unit strides and converts almost every L1 miss into a hit.",
+    "prompt": "Write `long solve(int *arr, int n)` to return the sum of all `n×n×n` integers stored row-major in `arr`, with the innermost loop iterating over the last (k) dimension.",
+    "expectedOutput": "Return the exact 64-bit sum of all n³ elements.",
+    "constraints": [
+      "n = 64 (fixed, array is n×n×n = 262144 ints)",
+      "arr is row-major: element [i][j][k] is at arr[i*n*n + j*n + k]",
+      "No multithreading",
+      "Result must be exact"
+    ],
+    "examples": [
+      {
+        "input": "arr[64×64×64] of random ints 1–100",
+        "output": "sum of all 262144 elements",
+        "explanation": "Outer i, middle j, inner k → arr[i*n*n + j*n + k] increments by 1 per inner step. The bad version has i innermost → stride n*n = 4096 per step."
+      }
+    ],
+    "targets": [
+      {
+        "key": "l1_mpki",
+        "label": "L1 MPKI",
+        "op": "<",
+        "value": 3,
+        "unit": "",
+        "icon": "L1"
+      },
+      {
+        "key": "ipc",
+        "label": "IPC",
+        "op": ">",
+        "value": 2.5,
+        "unit": "",
+        "icon": "IPC"
+      }
+    ],
+    "leaderboard": [],
+    "starterCode": "long solve(int *arr, int n) {\n    long sum = 0;\n    /* Bad: i in innermost loop — stride n*n between accesses */\n    for (int k = 0; k < n; k++)\n        for (int j = 0; j < n; j++)\n            for (int i = 0; i < n; i++)\n                sum += arr[i*n*n + j*n + k];\n    return sum;\n}\n",
+    "solutionCode": "long solve(int *arr, int n) {\n    long sum = 0;\n    /* Good: k in innermost loop — stride 1 between accesses */\n    for (int i = 0; i < n; i++)\n        for (int j = 0; j < n; j++)\n            for (int k = 0; k < n; k++)\n                sum += arr[i*n*n + j*n + k];\n    return sum;\n}\n",
+    "lastRunMetrics": null,
+    "rawStats": "",
+    "assembly": []
+  },
+  {
+    "id": 15,
+    "slug": "binary-search-eytzinger",
+    "title": "Binary Search — Cache-Friendly Eytzinger Layout",
+    "difficulty": "Hard",
+    "category": "Cache Locality",
+    "tags": [
+      "binary search",
+      "Eytzinger",
+      "BFS layout",
+      "search tree",
+      "prefetch"
+    ],
+    "solved": false,
+    "simConfig": "GShare BP · 4-wide OoO · 32KB L1",
+    "estimatedTime": "~12s",
+    "description": "Search for 100,000 query values in a sorted array of 65,536 keys.\n\nStandard binary search touches O(log₂ N) ≈ 16 cache lines per query, one per level. Each miss is serial — the next address is unknown until the current comparison resolves. With 100K queries that is ~1.6 million sequentially dependent cache misses.\n\nThe Eytzinger layout stores the binary search tree in BFS order: the root at index 1, its children at 2 and 3, and so on. Children of node k are at 2k and 2k+1. This makes the next two levels addressable before the current comparison finishes, enabling prefetch hints that hide 2 levels of latency per step.\n\nRearrange the keys into Eytzinger order and use `__builtin_prefetch` to overlap cache misses with computation.",
+    "prompt": "Write `int solve(const int *keys, int n, const int *queries, int q)` to return the count of queries found in the key set. You may rearrange keys internally before searching.",
+    "expectedOutput": "Return the exact integer count of queries that exist in the key array.",
+    "constraints": [
+      "keys[] is sorted ascending with n distinct values (≤65536)",
+      "q = 100000 queries",
+      "Return exact count of found queries",
+      "No multithreading",
+      "__builtin_prefetch allowed and encouraged"
+    ],
+    "examples": [
+      {
+        "input": "keys[65536] sorted, queries[100000] random ints 0..4M",
+        "output": "count of queries present in keys",
+        "explanation": "Eytzinger build: eyt[1]=median, eyt[2]=left-median, eyt[3]=right-median recursively. Search: k=1; while(k<=n) { prefetch eyt[4k]; k=2k+(eyt[k]<target); }"
+      }
+    ],
+    "targets": [
+      {
+        "key": "l1d_avg_latency",
+        "label": "L1D Avg Latency",
+        "op": "<",
+        "value": 30,
+        "unit": " cyc",
+        "icon": "L1"
+      },
+      {
+        "key": "ipc",
+        "label": "IPC",
+        "op": ">",
+        "value": 1.5,
+        "unit": "",
+        "icon": "IPC"
+      }
+    ],
+    "leaderboard": [],
+    "starterCode": "int solve(const int *keys, int n, const int *queries, int q) {\n    int found = 0;\n    for (int i = 0; i < q; i++) {\n        int lo = 0, hi = n - 1;\n        while (lo <= hi) {\n            int mid = (lo + hi) / 2;\n            if (keys[mid] == queries[i]) { found++; break; }\n            else if (keys[mid] < queries[i]) lo = mid + 1;\n            else hi = mid - 1;\n        }\n    }\n    return found;\n}\n",
+    "solutionCode": "#include <stdlib.h>\n\nstatic void build(const int *sorted, int *eyt, int node, int lo, int hi) {\n    if (lo > hi) return;\n    int mid = (lo + hi) / 2;\n    eyt[node] = sorted[mid];\n    build(sorted, eyt, 2*node,     lo,       mid - 1);\n    build(sorted, eyt, 2*node + 1, mid + 1,  hi);\n}\n\nint solve(const int *keys, int n, const int *queries, int q) {\n    int *eyt = (int *)calloc(n + 2, sizeof(int));\n    if (!eyt) return 0;\n    build(keys, eyt, 1, 0, n - 1);\n\n    int found = 0;\n    for (int i = 0; i < q; i++) {\n        int target = queries[i];\n        int k = 1;\n        while (k <= n) {\n            __builtin_prefetch(&eyt[4 * k], 0, 0);\n            if (eyt[k] == target) { found++; break; }\n            k = 2*k + (eyt[k] < target);\n        }\n    }\n    free(eyt);\n    return found;\n}\n",
+    "lastRunMetrics": null,
+    "rawStats": "",
+    "assembly": []
+  },
+  {
+    "id": 16,
+    "slug": "streaming-square-sum",
+    "title": "Streaming Computation — Multiple Accumulators for ILP",
+    "difficulty": "Easy",
+    "category": "ILP / Pipeline",
+    "tags": [
+      "accumulators",
+      "unrolling",
+      "ILP",
+      "dependency chain"
+    ],
+    "solved": false,
+    "simConfig": "GShare BP · 4-wide OoO · 32KB L1",
+    "estimatedTime": "~8s",
+    "description": "Compute `sum((src[i] * src[i]) & 0xFFFF)` for 1 million bytes.\n\nThe baseline uses a single running accumulator, so every addition must wait for the previous one to complete — a serial dependency chain that limits the CPU to one add per cycle regardless of how wide the execution units are.\n\nUnroll the loop and use multiple independent accumulators so the out-of-order core can issue several multiply-and-mask operations simultaneously. The computation is entirely ALU-bound with no cache misses — this is a pure ILP exercise that shows how dependency chains limit throughput even on modern CPUs.",
+    "prompt": "Write `long solve(const unsigned char *src, int n)` to return `sum((src[i] * src[i]) & 0xFFFF)` using multiple independent accumulators to exploit instruction-level parallelism.",
+    "expectedOutput": "Return the exact 64-bit sum.",
+    "constraints": [
+      "n = 1,000,000 (fixed)",
+      "src[i] is a byte value 1–256",
+      "Computation per element: (src[i] * src[i]) & 0xFFFF",
+      "Result must be exact",
+      "No multithreading",
+      "SIMD allowed"
+    ],
+    "examples": [
+      {
+        "input": "src[1M] of random bytes 1–256",
+        "output": "sum((src[i]*src[i]) & 0xFFFF) for all i",
+        "explanation": "Four accumulators s0,s1,s2,s3 each handle every 4th element independently. The CPU can compute all four multiply-and-mask operations in parallel since they share no data dependencies."
+      }
+    ],
+    "targets": [
+      {
+        "key": "ipc",
+        "label": "IPC",
+        "op": ">",
+        "value": 3.5,
+        "unit": "",
+        "icon": "IPC"
+      },
+      {
+        "key": "cycles",
+        "label": "Cycles",
+        "op": "<",
+        "value": 1500000.0,
+        "unit": "",
+        "icon": "CLK"
+      }
+    ],
+    "leaderboard": [],
+    "starterCode": "long solve(const unsigned char *src, int n) {\n    long sum = 0;\n    for (int i = 0; i < n; i++)\n        sum += (long)((unsigned int)src[i] * src[i] & 0xFFFF);\n    return sum;\n}\n",
+    "solutionCode": "long solve(const unsigned char *src, int n) {\n    long s0 = 0, s1 = 0, s2 = 0, s3 = 0;\n    int i = 0;\n    for (; i <= n - 4; i += 4) {\n        s0 += (long)((unsigned int)src[i+0] * src[i+0] & 0xFFFF);\n        s1 += (long)((unsigned int)src[i+1] * src[i+1] & 0xFFFF);\n        s2 += (long)((unsigned int)src[i+2] * src[i+2] & 0xFFFF);\n        s3 += (long)((unsigned int)src[i+3] * src[i+3] & 0xFFFF);\n    }\n    for (; i < n; i++)\n        s0 += (long)((unsigned int)src[i] * src[i] & 0xFFFF);\n    return s0 + s1 + s2 + s3;\n}\n",
+    "lastRunMetrics": null,
+    "rawStats": "",
+    "assembly": []
+  },
+  {
+    "id": 17,
+    "slug": "row-major-cache-locality",
+    "title": "2D Grid Sum — Fix Column-First Access Order",
+    "difficulty": "Medium",
+    "category": "Cache Locality",
+    "tags": [
+      "loop order",
+      "row-major",
+      "spatial locality",
+      "cache-friendly",
+      "stride"
+    ],
+    "solved": false,
+    "simConfig": "ChampSim · 4-wide OoO · cache locality study",
+    "estimatedTime": "~10s",
+    "description": "Sum all values in a large row-major 2D grid.\n\nThe baseline walks the grid column-first: the outer loop steps across columns (x), and the inner loop steps down rows (y). Because the array is stored in row-major order, consecutive iterations of the inner loop jump by an entire row width — a stride of 2048 integers, or 8 KB. Every step lands on a cold cache line, so the inner loop is almost always waiting for memory.\n\nRewrite the traversal so the inner loop moves along a single row (x varies fastest). Consecutive accesses are then adjacent in memory, one cache line covers 16 elements, and the L1 hit rate improves dramatically. Tiled blocking can push performance further, but even a simple loop-order swap already meets all targets.",
+    "prompt": "Write `long solve(int *grid, int n)` to return the exact sum of all values in an `n × n` row-major integer grid, traversing memory in a cache-friendly order.",
+    "expectedOutput": "Return the exact 64-bit sum of all grid elements.",
+    "constraints": [
+      "n = 2048 (fixed in the harness)",
+      "grid is stored row-major: element [y][x] is at grid[y*n + x]",
+      "Result must be exact",
+      "No multithreading",
+      "SIMD allowed"
+    ],
+    "examples": [
+      {
+        "input": "grid[2048×2048] of deterministic ints",
+        "output": "sum of all 2048² elements",
+        "explanation": "Outer y, inner x → grid[y*n+x] increments by 1 per inner step. The bad version has x outer, y inner → stride n=2048 ints (8 KB) per step, guaranteeing an L1 miss every iteration."
+      }
+    ],
+    "targets": [
+      {
+        "key": "ipc",
+        "label": "IPC",
+        "op": ">",
+        "value": 2.2,
+        "unit": "",
+        "icon": "IPC"
+      },
+      {
+        "key": "l1d_avg_latency",
+        "label": "L1D Avg Miss Latency",
+        "op": "<",
+        "value": 18,
+        "unit": " cyc",
+        "icon": "L1"
+      },
+      {
+        "key": "llc_mpki",
+        "label": "LLC MPKI",
+        "op": "<",
+        "value": 1.2,
+        "unit": "",
+        "icon": "LLC"
+      }
+    ],
+    "leaderboard": [],
+    "starterCode": "long solve(int *grid, int n) {\n  long sum = 0;\n  for (int x = 0; x < n; x++) {\n    for (int y = 0; y < n; y++) {\n      sum += grid[y * n + x];\n    }\n  }\n  return sum;\n}\n",
+    "solutionCode": "#define TILE 64\n\nlong solve(int *grid, int n) {\n  long sum = 0;\n  for (int y0 = 0; y0 < n; y0 += TILE) {\n    for (int x0 = 0; x0 < n; x0 += TILE) {\n      int y1 = (y0 + TILE < n) ? (y0 + TILE) : n;\n      int x1 = (x0 + TILE < n) ? (x0 + TILE) : n;\n\n      for (int y = y0; y < y1; y++) {\n        int *row = grid + y * n;\n        for (int x = x0; x < x1; x++) {\n          sum += row[x];\n        }\n      }\n    }\n  }\n  return sum;\n}\n",
+    "lastRunMetrics": null,
+    "rawStats": "",
+    "assembly": []
+  },
+  {
+    "id": 18,
+    "slug": "saxpy-auto-vectorize",
+    "title": "SAXPY — Unlock Auto-Vectorization",
+    "difficulty": "Easy",
+    "category": "ILP / Pipeline",
+    "tags": [
+      "SIMD",
+      "vectorization",
+      "throughput",
+      "arrays"
+    ],
+    "solved": false,
+    "simConfig": "ChampSim · 8-wide OoO · throughput study",
+    "estimatedTime": "~8s",
+    "description": "Compute the classic SAXPY update `y[i] = a*x[i] + y[i]` over a large float array.\n\nThe baseline is correct but intentionally conservative. Rewrite the loop into a regular, vectorization-friendly form so the compiler and the out-of-order core can extract more throughput.\n\nThis is a practical bridge from ILP thinking to SIMD-style optimization, even without explicit intrinsics.",
+    "prompt": "Write `void solve(float a, const float *x, float *y, int n)` to update all `n` elements of `y` with `a*x[i] + y[i]`.",
+    "expectedOutput": "The harness prints a checksum of the updated y array. Your result must match the reference within an absolute tolerance of 1e-4.",
+    "constraints": [
+      "n = 262144 (fixed in the harness)",
+      "No multithreading",
+      "No external libraries",
+      "SIMD intrinsics not required",
+      "Floating-point checksum tolerance: 1e-4"
+    ],
+    "examples": [
+      {
+        "input": "a = 1.75f, x[n], y[n]",
+        "output": "updated y with checksum(y)",
+        "explanation": "Simple contiguous loops with no aliasing surprises are ideal auto-vectorization targets."
+      }
+    ],
+    "targets": [
+      {
+        "key": "ipc",
+        "label": "IPC",
+        "op": ">",
+        "value": 3.2,
+        "unit": "",
+        "icon": "IPC"
+      },
+      {
+        "key": "cycles",
+        "label": "Cycles",
+        "op": "<",
+        "value": 1200000.0,
+        "unit": "",
+        "icon": "IPC"
+      }
+    ],
+    "leaderboard": [],
+    "starterCode": "void solve(float a, const float *x, float *y, int n) {\n  for (int i = 0; i < n; i++) {\n    float xi = x[i];\n    float yi = y[i];\n    y[i] = yi + a * xi;\n  }\n}\n",
+    "solutionCode": "void solve(float a, const float *x, float *y, int n) {\n  int i = 0;\n\n  for (; i <= n - 8; i += 8) {\n    y[i + 0] = a * x[i + 0] + y[i + 0];\n    y[i + 1] = a * x[i + 1] + y[i + 1];\n    y[i + 2] = a * x[i + 2] + y[i + 2];\n    y[i + 3] = a * x[i + 3] + y[i + 3];\n    y[i + 4] = a * x[i + 4] + y[i + 4];\n    y[i + 5] = a * x[i + 5] + y[i + 5];\n    y[i + 6] = a * x[i + 6] + y[i + 6];\n    y[i + 7] = a * x[i + 7] + y[i + 7];\n  }\n\n  for (; i < n; i++) {\n    y[i] = a * x[i] + y[i];\n  }\n}\n",
+    "lastRunMetrics": null,
+    "rawStats": "",
+    "assembly": []
+  },
+  {
+    "id": 19,
+    "slug": "gather-reorder-cache-clustering",
+    "title": "Gather Reordering — Cluster Accesses by Cache Region",
+    "difficulty": "Medium",
+    "category": "Cache Locality",
+    "tags": [
+      "cache locality",
+      "gather",
+      "reordering",
+      "working set",
+      "random access"
+    ],
+    "solved": false,
+    "simConfig": "ChampSim · 4-wide OoO · cache locality study",
+    "estimatedTime": "~10s",
+    "description": "Sum integers from a large array using an index permutation.\n\nThe baseline walks the permutation in arrival order, so each iteration may jump to a completely different region of the data array. With a 512 KB data array and indices scattered randomly, most accesses land on cold cache lines, and the CPU stalls waiting for memory on nearly every iteration.\n\nReorder the accesses internally so indices that point to the same cache-line region are processed together. By sorting or bucketing indices before gathering, you turn a random-access stream into a set of short sequential bursts, allowing the hardware prefetcher to help and dramatically reducing the number of distinct cache lines touched at any moment. You must still read every referenced element exactly once and return the exact total.",
+    "prompt": "Write `long solve(const int *data, const int *indices, int n)` to return the exact sum of `data[indices[i]]` for all `i`, while improving cache locality by regrouping accesses before gathering.",
+    "expectedOutput": "Return the exact 64-bit sum of all gathered values.",
+    "constraints": [
+      "n = 131072 (fixed in the harness)",
+      "indices[] is a permutation of 0..n-1",
+      "You must access every referenced element exactly once",
+      "No multithreading",
+      "Result must be exact"
+    ],
+    "examples": [
+      {
+        "input": "data[131072], indices[131072] = random permutation",
+        "output": "sum(data[indices[i]])",
+        "explanation": "Grouping indices that fall within the same cache-line or page region reduces the number of distinct cold lines touched and lets the hardware prefetcher cover short sequential runs."
+      }
+    ],
+    "targets": [
+      {
+        "key": "ipc",
+        "label": "IPC",
+        "op": ">",
+        "value": 1.9,
+        "unit": "",
+        "icon": "IPC"
+      },
+      {
+        "key": "l1d_avg_latency",
+        "label": "L1D Avg Miss Latency",
+        "op": "<",
+        "value": 24,
+        "unit": " cyc",
+        "icon": "L1"
+      },
+      {
+        "key": "llc_mpki",
+        "label": "LLC MPKI",
+        "op": "<",
+        "value": 1.8,
+        "unit": "",
+        "icon": "LLC"
+      }
+    ],
+    "leaderboard": [],
+    "starterCode": "long solve(const int *data, const int *indices, int n) {\n  long sum = 0;\n  for (int i = 0; i < n; i++) {\n    sum += data[indices[i]];\n  }\n  return sum;\n}\n",
+    "solutionCode": "#include <stdlib.h>\n\n#define PAGE_BYTES 4096\n#define INTS_PER_PAGE (PAGE_BYTES / (int)sizeof(int))\n\nlong solve(const int *data, const int *indices, int n) {\n  int pages = (n + INTS_PER_PAGE - 1) / INTS_PER_PAGE;\n  int *counts = (int *)calloc((size_t)pages, sizeof(int));\n  int *offsets = (int *)calloc((size_t)(pages + 1), sizeof(int));\n  int *ordered = (int *)malloc((size_t)n * sizeof(int));\n  if (!counts || !offsets || !ordered) {\n    free(counts);\n    free(offsets);\n    free(ordered);\n    return 0;\n  }\n\n  for (int i = 0; i < n; i++) {\n    counts[indices[i] / INTS_PER_PAGE]++;\n  }\n\n  for (int p = 0; p < pages; p++) {\n    offsets[p + 1] = offsets[p] + counts[p];\n  }\n\n  for (int i = 0; i < n; i++) {\n    int page = indices[i] / INTS_PER_PAGE;\n    ordered[offsets[page]++] = indices[i];\n  }\n\n  for (int p = pages; p > 0; p--) {\n    offsets[p] = offsets[p - 1];\n  }\n  offsets[0] = 0;\n\n  long sum = 0;\n  for (int i = 0; i < n; i++) {\n    sum += data[ordered[i]];\n  }\n\n  free(counts);\n  free(offsets);\n  free(ordered);\n  return sum;\n}\n",
+    "lastRunMetrics": null,
+    "rawStats": "",
+    "assembly": []
+  },
+  {
+    "id": 20,
+    "slug": "masked-saxpy-branchless",
+    "title": "Masked SAXPY — Remove Branches, Unlock Throughput",
+    "difficulty": "Medium",
+    "category": "Branch Prediction",
+    "tags": [
+      "branchless",
+      "SIMD",
+      "saxpy",
+      "throughput"
+    ],
+    "solved": false,
+    "simConfig": "ChampSim · 8-wide OoO · branch + throughput study",
+    "estimatedTime": "~9s",
+    "description": "Apply a masked SAXPY update: if `mask[i]` is 1, do `y[i] = a*x[i] + y[i]`; otherwise leave `y[i]` unchanged.\n\nThe baseline uses a branch on every element. With a roughly 50/50 mask, that branch is hard to predict and also makes the hot loop less friendly to vectorization.\n\nRewrite the loop so it stays exact but becomes branchless and throughput-oriented.",
+    "prompt": "Write `void solve(float a, const float *x, float *y, const unsigned char *mask, int n)` to apply the masked SAXPY update exactly.",
+    "expectedOutput": "The harness prints a checksum of y. Your result must match the reference within an absolute tolerance of 1e-4.",
+    "constraints": [
+      "n = 262144 (fixed in the harness)",
+      "mask[i] is either 0 or 1",
+      "No multithreading",
+      "SIMD allowed",
+      "Floating-point tolerance: 1e-4"
+    ],
+    "examples": [
+      {
+        "input": "a = 1.5f, x[n], y[n], mask[n] in {0,1}",
+        "output": "updated y after masked SAXPY",
+        "explanation": "A branchless multiply-by-mask form keeps the loop regular and predictable."
+      }
+    ],
+    "targets": [
+      {
+        "key": "ipc",
+        "label": "IPC",
+        "op": ">",
+        "value": 3,
+        "unit": "",
+        "icon": "IPC"
+      },
+      {
+        "key": "branch_mpki",
+        "label": "Branch MPKI",
+        "op": "<",
+        "value": 1.2,
+        "unit": "",
+        "icon": "BP"
+      }
+    ],
+    "leaderboard": [],
+    "starterCode": "void solve(float a, const float *x, float *y, const unsigned char *mask, int n) {\n  for (int i = 0; i < n; i++) {\n    if (mask[i]) {\n      y[i] = a * x[i] + y[i];\n    }\n  }\n}\n",
+    "solutionCode": "void solve(float a, const float *x, float *y, const unsigned char *mask, int n) {\n  int i = 0;\n  for (; i <= n - 8; i += 8) {\n    y[i + 0] += (a * x[i + 0]) * (float)mask[i + 0];\n    y[i + 1] += (a * x[i + 1]) * (float)mask[i + 1];\n    y[i + 2] += (a * x[i + 2]) * (float)mask[i + 2];\n    y[i + 3] += (a * x[i + 3]) * (float)mask[i + 3];\n    y[i + 4] += (a * x[i + 4]) * (float)mask[i + 4];\n    y[i + 5] += (a * x[i + 5]) * (float)mask[i + 5];\n    y[i + 6] += (a * x[i + 6]) * (float)mask[i + 6];\n    y[i + 7] += (a * x[i + 7]) * (float)mask[i + 7];\n  }\n  for (; i < n; i++) {\n    y[i] += (a * x[i]) * (float)mask[i];\n  }\n}\n",
+    "lastRunMetrics": null,
+    "rawStats": "",
+    "assembly": []
+  },
+  {
+    "id": 21,
+    "slug": "dot-product-eight-accumulators",
+    "title": "Dot Product — Eight Accumulators for ILP",
+    "difficulty": "Easy",
+    "category": "ILP / Pipeline",
+    "tags": [
+      "dot product",
+      "accumulators",
+      "unrolling",
+      "ILP"
+    ],
+    "solved": false,
+    "simConfig": "ChampSim · 8-wide OoO · dependency-chain study",
+    "estimatedTime": "~8s",
+    "description": "Compute the dot product of two large float arrays.\n\nThe baseline uses one running accumulator, which creates a long floating-point dependency chain. That limits instruction-level parallelism even when data is already streaming nicely from memory.\n\nBreak the chain with several independent partial sums, then combine them at the end.",
+    "prompt": "Write `float solve(const float *a, const float *b, int n)` to return the dot product of two float arrays while exposing more ILP than a single-accumulator loop.",
+    "expectedOutput": "Return a floating-point result that matches the reference within an absolute tolerance of 1e-3.",
+    "constraints": [
+      "n = 262144 (fixed in the harness)",
+      "No multithreading",
+      "SIMD allowed",
+      "Floating-point tolerance: 1e-3"
+    ],
+    "examples": [
+      {
+        "input": "a[n], b[n]",
+        "output": "sum(a[i] * b[i])",
+        "explanation": "Independent accumulators let the out-of-order core overlap more multiply-add work."
+      }
+    ],
+    "targets": [
+      {
+        "key": "ipc",
+        "label": "IPC",
+        "op": ">",
+        "value": 3.4,
+        "unit": "",
+        "icon": "IPC"
+      },
+      {
+        "key": "branch_mpki",
+        "label": "Branch MPKI",
+        "op": "<",
+        "value": 0.5,
+        "unit": "",
+        "icon": "BP"
+      }
+    ],
+    "leaderboard": [],
+    "starterCode": "float solve(const float *a, const float *b, int n) {\n  float acc = 0.0f;\n  for (int i = 0; i < n; i++) {\n    acc += a[i] * b[i];\n  }\n  return acc;\n}\n",
+    "solutionCode": "float solve(const float *a, const float *b, int n) {\n  float s0 = 0.0f, s1 = 0.0f, s2 = 0.0f, s3 = 0.0f;\n  float s4 = 0.0f, s5 = 0.0f, s6 = 0.0f, s7 = 0.0f;\n  int i = 0;\n\n  for (; i <= n - 8; i += 8) {\n    s0 += a[i + 0] * b[i + 0];\n    s1 += a[i + 1] * b[i + 1];\n    s2 += a[i + 2] * b[i + 2];\n    s3 += a[i + 3] * b[i + 3];\n    s4 += a[i + 4] * b[i + 4];\n    s5 += a[i + 5] * b[i + 5];\n    s6 += a[i + 6] * b[i + 6];\n    s7 += a[i + 7] * b[i + 7];\n  }\n\n  for (; i < n; i++) {\n    s0 += a[i] * b[i];\n  }\n\n  return (s0 + s1) + (s2 + s3) + (s4 + s5) + (s6 + s7);\n}\n",
+    "lastRunMetrics": null,
+    "rawStats": "",
+    "assembly": []
+  },
+  {
+    "id": 22,
+    "slug": "lookup-table-grade-bands",
+    "title": "Grade Bands — Replace Nested Branches with a LUT",
+    "difficulty": "Easy",
+    "category": "Branch Prediction",
+    "tags": [
+      "lookup table",
+      "branchless",
+      "classification",
+      "repeated passes"
+    ],
+    "solved": false,
+    "simConfig": "ChampSim · TAGE-SC-L · branch study",
+    "estimatedTime": "~8s",
+    "description": "Classify scores into grade bands over many repeated passes.\n\nThe baseline uses a nested if/else tree for every score on every pass. With scores spread broadly across the input range, the control flow is less predictable than it needs to be.\n\nPrecompute a tiny lookup table once, then turn the hot loop into a simple table lookup and accumulation.",
+    "prompt": "Write `long solve(const unsigned char *scores, int n)` to return the weighted total across 200 passes, where scores map to weights by band.",
+    "expectedOutput": "Return the exact 64-bit total produced by the reference classification logic over all 200 passes.",
+    "constraints": [
+      "n = 100000 (fixed in the harness)",
+      "scores[i] are in the range 0..100",
+      "You may precompute lookup tables",
+      "No multithreading",
+      "Result must be exact"
+    ],
+    "examples": [
+      {
+        "input": "scores[100000] of values 0..100, REPEATS = 200",
+        "output": "sum of band weights over all passes",
+        "explanation": "A 101-entry or 256-entry lookup table removes nested branches from the repeated hot loop."
+      }
+    ],
+    "targets": [
+      {
+        "key": "ipc",
+        "label": "IPC",
+        "op": ">",
+        "value": 2.8,
+        "unit": "",
+        "icon": "IPC"
+      },
+      {
+        "key": "branch_mpki",
+        "label": "Branch MPKI",
+        "op": "<",
+        "value": 1.5,
+        "unit": "",
+        "icon": "BP"
+      }
+    ],
+    "leaderboard": [],
+    "starterCode": "#define REPEATS 200\n\nlong solve(const unsigned char *scores, int n) {\n  long total = 0;\n  for (int r = 0; r < REPEATS; r++) {\n    for (int i = 0; i < n; i++) {\n      unsigned char s = scores[i];\n      if (s < 60) total += 1;\n      else if (s < 70) total += 2;\n      else if (s < 80) total += 4;\n      else if (s < 90) total += 8;\n      else total += 16;\n    }\n  }\n  return total;\n}\n",
+    "solutionCode": "#define REPEATS 200\n\nlong solve(const unsigned char *scores, int n) {\n  long total = 0;\n  unsigned char lut[256] = {0};\n\n  for (int s = 0; s <= 100; s++) {\n    if (s < 60) lut[s] = 1;\n    else if (s < 70) lut[s] = 2;\n    else if (s < 80) lut[s] = 4;\n    else if (s < 90) lut[s] = 8;\n    else lut[s] = 16;\n  }\n\n  for (int r = 0; r < REPEATS; r++) {\n    for (int i = 0; i < n; i++) {\n      total += lut[scores[i]];\n    }\n  }\n  return total;\n}\n",
+    "lastRunMetrics": null,
+    "rawStats": "",
+    "assembly": []
+  }
+]

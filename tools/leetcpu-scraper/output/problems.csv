@@ -1,0 +1,118 @@
+id,slug,title,difficulty,category,tags,sim_config,estimated_time,n_constraints,n_examples,n_targets,targets,has_solution,url,description
+1,stable-partition-branches,Stable Partition for Predictable Branches,Easy,Branch Prediction,bimodal | stable partition | amortized,Bimodal BP · 4-wide OoO · 32KB L1,~8s,5,1,2,Branch MPKI<1.5 | IPC>2.6,True,https://www.leetcpu.com/#/problem/stable-partition-branches,"You must answer the same threshold query 100 times on an array of 100,000 integers.
+
+In the baseline, each pass scans the original random-order array. Because the branch `arr[i] > 128` is nearly 50/50 on random data, the bimodal branch predictor mispredicts often.
+
+You may preprocess the array once before the 100 passes begin. Reorder the data so the hot branch becomes easy to predict, while keeping exactly the same values and final sum as the reference implementation."
+2,matrix-multiply-tiling,Matrix Multiply — Cache Tiling,Easy,Cache Locality,L1/L2 | loop tiling | transpose,TAGE BP · 4-wide OoO · 48KB L1,~10s,5,1,3,L1 MPKI<5 | IPC>2 | LLC MPKI<1,True,https://www.leetcpu.com/#/problem/matrix-multiply-tiling,"Multiply two row-major 512×512 float matrices: `C = A × B`.
+
+The baseline reads rows of `A` but walks down columns of `B`, which gives poor spatial locality and creates avoidable cache misses.
+
+Rewrite the loop nest with blocking, transposition, or both so the inner loops read memory in a cache-friendly order."
+3,reduction-tree-ilp,Reduction Tree — Break Dependency Chains,Medium,ILP / Pipeline,OoO | unroll | multiple accumulators,TAGE · 8-wide OoO · ROB=512,~9s,4,1,2,IPC>3.5 | Branch MPKI<0.5,True,https://www.leetcpu.com/#/problem/reduction-tree-ilp,"Sum 100,000 floating-point values.
+
+The baseline uses one running accumulator, so every addition depends on the previous one. That long dependency chain prevents the out-of-order core from overlapping many adds.
+
+Restructure the reduction to create independent work, for example with multiple accumulators and loop unrolling, while staying within the allowed floating-point tolerance."
+4,interleaved-pointer-chasing,Pointer Chasing — Recover Memory Parallelism,Medium,Memory Parallelism,MLP | linked list | latency hiding,IP-stride prefetch · 16MB LLC,~12s,4,1,3,LLC MPKI<2 | IPC>1.8 | L1 MPKI<8,True,https://www.leetcpu.com/#/problem/interleaved-pointer-chasing,"You must sum the values stored in 8 independent linked lists, each containing 125,000 nodes.
+
+The baseline finishes one list before moving to the next. That creates one long chain of dependent cache misses, so the CPU often sits idle waiting for memory.
+
+Change the traversal order so misses from different lists can overlap and the core can exploit more memory-level parallelism."
+5,bottleneck-triage,Bottleneck Triage — Diagnose and Fix,Hard,Diagnosis,counters | branch | cache | ILP,Perceptron BP · realistic config,~11s,5,0,3,IPC>3 | L1 MPKI<4 | Branch MPKI<2,True,https://www.leetcpu.com/#/problem/bottleneck-triage,"This workload is slow for several independent reasons.
+
+Baseline metrics:
+• IPC: 0.7  (target: > 3.0)
+• L1 MPKI: 36.0  (target: < 4.0)
+• Branch MPKI: 18.0  (target: < 2.0)
+
+The starter code combines three different bottlenecks: poor locality, an unpredictable branch, and unnecessary dependency pressure. Use the counters, source, and assembly to identify those issues and rewrite the loop so all targets are met at the same time."
+6,strided-sum-prefetch,Strided Sum — Hide Latency with Prefetch,Medium,Memory Parallelism,prefetch | stride-16 | latency hiding,ChampSim · stride prefetch · 4-wide OoO,~11s,5,1,3,IPC>1.9 | LLC MPKI<1.5 | L2 MPKI<3,True,https://www.leetcpu.com/#/problem/strided-sum-prefetch,"You must sum one integer from every 64-byte region of a large array.
+
+The baseline reads `arr[i * 16]`, so each iteration pulls from a new cache line. That pattern easily turns into a latency-bound loop if the core waits for one miss at a time.
+
+Use techniques such as software prefetching, unrolling, or multiple accumulators so several memory accesses can be in flight together."
+7,bitset-popcount-throughput,Bitset Scan — Turn Scalar Loops into Throughput,Easy,ILP / Pipeline,popcount | bitset | throughput,ChampSim · wide integer backend · 8-wide OoO,~7s,4,1,2,IPC>3.8 | Branch MPKI<0.5,True,https://www.leetcpu.com/#/problem/bitset-popcount-throughput,"You must count all set bits in a large bitmap.
+
+The baseline examines all 64 bit positions of every word with a scalar inner loop. That wastes instructions and underuses the CPU's dedicated population-count hardware.
+
+Replace the bit-by-bit scan with a throughput-friendly approach that maps well to popcount instructions."
+8,particle-struct-repacking,Particle Score — Repack Structs for Bandwidth,Medium,Cache Locality,AoS | SoA | bandwidth,ChampSim · 48KB L1D · bandwidth study,~10s,4,1,2,IPC>2.6 | L1 MPKI<4,True,https://www.leetcpu.com/#/problem/particle-struct-repacking,"Each particle stores four float fields in an array-of-structs layout. The computation only needs the expression `x*w + y*z` for every particle, but the baseline processes the array in a way that leaves bandwidth and instruction throughput on the table.
+
+Repack the hot fields into a denser layout, or otherwise restructure the loop, so the CPU can stream data and arithmetic more efficiently."
+9,image-blur-tiling,Image Blur — Tile the Working Set,Medium,Cache Locality,stencil | tiling | row reuse,ChampSim · 32KB L1D · stencil trace,~9s,4,1,3,IPC>2.4 | L1 MPKI<3.5 | LLC MPKI<0.6,True,https://www.leetcpu.com/#/problem/image-blur-tiling,"Apply a horizontal 3-tap blur to a 512×512 image.
+
+The arithmetic per pixel is small, so performance depends mostly on keeping rows hot in cache and writing the output sequentially.
+
+Rewrite the starter code with pointer arithmetic, tiling, unrolling, or similar loop improvements so the working set stays cache-friendly."
+10,branchless-score-window,Score Window — Remove Unpredictable Branches,Easy,Branch Prediction,branchless | range check | hot loop,ChampSim · TAGE-SC-L · branch study,~7s,4,1,2,IPC>3 | Branch MPKI<1,True,https://www.leetcpu.com/#/problem/branchless-score-window,"A scoring loop must add only the values inside a target range.
+
+The baseline uses two nested branches per element. When the input scores are spread roughly uniformly, those branches become hard to predict and hurt front-end throughput.
+
+Rewrite the loop so the result stays exact but the hot path becomes much more predictable, ideally branchless."
+11,ece-jacobi-stencil-lab,ECE Lab — 2D Jacobi Stencil Cache Blocking,Medium,Cache Locality,stencil | blocking | row reuse | ece-lab,ChampSim · 4-wide OoO · 32KB L1D · classroom trace,~12s,5,1,3,IPC>2.4 | L1 MPKI<4.5 | LLC MPKI<0.8,True,https://www.leetcpu.com/#/problem/ece-jacobi-stencil-lab,"This challenge mirrors a classic cache-optimization lab from upper-level computer architecture courses.
+
+You must perform one Jacobi sweep on a 1024×1024 grid. The baseline is correct, but it streams through a large 2D array with limited attention to cache reuse in the hot loop.
+
+Rewrite the kernel so it produces the same numerical result while improving locality in L1 and L2. Row blocking, pointer hoisting, and light unrolling are all valid approaches."
+12,irregular-gather-prefetch,Irregular Gather — Prefetch Ahead of Random Access,Medium,Memory Parallelism,prefetch | gather | latency hiding | random access,GShare BP · 4-wide OoO · IP-stride prefetch,~10s,6,1,2,L1D Avg Miss Latency<25 cyc | IPC>2,True,https://www.leetcpu.com/#/problem/irregular-gather-prefetch,"Sum 128K integers accessed in a random order defined by an index permutation.
+
+The baseline walks `indices[]` sequentially and fetches `data[indices[i]]` on demand. Because each index points to a random location in a 512 KB data array, every iteration triggers an L1 miss — and the CPU stalls waiting for each one before it can compute the next address.
+
+Add software prefetch hints so the CPU requests the next cache line before it is needed, allowing misses to overlap with useful work.
+
+The key metric is L1D average miss latency. On the baseline it will be 45–55 cycles because the CPU sits idle. With effective prefetching it should drop below 25 cycles as future accesses are already in flight."
+13,histogram-dependency-chains,Histogram — Break Write Dependency Chains,Medium,ILP / Pipeline,histogram | dependency chains | write conflicts | interleaving,GShare BP · 4-wide OoO · 32KB L1,~9s,5,1,2,IPC>2.5 | L1D Avg Latency<15 cyc,True,https://www.leetcpu.com/#/problem/histogram-dependency-chains,"Fill a 256-bucket histogram from 2 million random bytes.
+
+The baseline does `hist[arr[i]]++` on every element. When two consecutive elements share the same bucket, the second increment must wait for the first to complete — a write-after-write dependency chain that stalls the pipeline.
+
+Break those chains by computing several independent partial histograms in parallel and merging them at the end. With 4 interleaved histograms, the probability that two consecutive updates collide on the same bucket drops dramatically, so the CPU can retire multiple updates per cycle."
+14,3d-loop-interchange,3D Array — Fix Loop Order for Sequential Access,Easy,Cache Locality,loop interchange | 3D array | stride | spatial locality,GShare BP · 4-wide OoO · 32KB L1,~8s,4,1,2,L1 MPKI<3 | IPC>2.5,True,https://www.leetcpu.com/#/problem/3d-loop-interchange,"Sum all elements of a 64×64×64 integer array.
+
+The array is stored in row-major order: element `[i][j][k]` lives at offset `i*64*64 + j*64 + k`. When k varies fastest in the inner loop, consecutive accesses are adjacent in memory — one cache line covers 16 integers.
+
+The baseline iterates with i in the inner loop instead, so each step jumps by 64×64 = 4096 integers (16 KB), pulling a new cache line on every iteration.
+
+Simply reorder the three loops so k varies fastest. This turns 4096-element strides into unit strides and converts almost every L1 miss into a hit."
+15,binary-search-eytzinger,Binary Search — Cache-Friendly Eytzinger Layout,Hard,Cache Locality,binary search | Eytzinger | BFS layout | search tree | prefetch,GShare BP · 4-wide OoO · 32KB L1,~12s,5,1,2,L1D Avg Latency<30 cyc | IPC>1.5,True,https://www.leetcpu.com/#/problem/binary-search-eytzinger,"Search for 100,000 query values in a sorted array of 65,536 keys.
+
+Standard binary search touches O(log₂ N) ≈ 16 cache lines per query, one per level. Each miss is serial — the next address is unknown until the current comparison resolves. With 100K queries that is ~1.6 million sequentially dependent cache misses.
+
+The Eytzinger layout stores the binary search tree in BFS order: the root at index 1, its children at 2 and 3, and so on. Children of node k are at 2k and 2k+1. This makes the next two levels addressable before the current comparison finishes, enabling prefetch hints that hide 2 levels of latency per step.
+
+Rearrange the keys into Eytzinger order and use `__builtin_prefetch` to overlap cache misses with computation."
+16,streaming-square-sum,Streaming Computation — Multiple Accumulators for ILP,Easy,ILP / Pipeline,accumulators | unrolling | ILP | dependency chain,GShare BP · 4-wide OoO · 32KB L1,~8s,6,1,2,IPC>3.5 | Cycles<1500000.0,True,https://www.leetcpu.com/#/problem/streaming-square-sum,"Compute `sum((src[i] * src[i]) & 0xFFFF)` for 1 million bytes.
+
+The baseline uses a single running accumulator, so every addition must wait for the previous one to complete — a serial dependency chain that limits the CPU to one add per cycle regardless of how wide the execution units are.
+
+Unroll the loop and use multiple independent accumulators so the out-of-order core can issue several multiply-and-mask operations simultaneously. The computation is entirely ALU-bound with no cache misses — this is a pure ILP exercise that shows how dependency chains limit throughput even on modern CPUs."
+17,row-major-cache-locality,2D Grid Sum — Fix Column-First Access Order,Medium,Cache Locality,loop order | row-major | spatial locality | cache-friendly | stride,ChampSim · 4-wide OoO · cache locality study,~10s,5,1,3,IPC>2.2 | L1D Avg Miss Latency<18 cyc | LLC MPKI<1.2,True,https://www.leetcpu.com/#/problem/row-major-cache-locality,"Sum all values in a large row-major 2D grid.
+
+The baseline walks the grid column-first: the outer loop steps across columns (x), and the inner loop steps down rows (y). Because the array is stored in row-major order, consecutive iterations of the inner loop jump by an entire row width — a stride of 2048 integers, or 8 KB. Every step lands on a cold cache line, so the inner loop is almost always waiting for memory.
+
+Rewrite the traversal so the inner loop moves along a single row (x varies fastest). Consecutive accesses are then adjacent in memory, one cache line covers 16 elements, and the L1 hit rate improves dramatically. Tiled blocking can push performance further, but even a simple loop-order swap already meets all targets."
+18,saxpy-auto-vectorize,SAXPY — Unlock Auto-Vectorization,Easy,ILP / Pipeline,SIMD | vectorization | throughput | arrays,ChampSim · 8-wide OoO · throughput study,~8s,5,1,2,IPC>3.2 | Cycles<1200000.0,True,https://www.leetcpu.com/#/problem/saxpy-auto-vectorize,"Compute the classic SAXPY update `y[i] = a*x[i] + y[i]` over a large float array.
+
+The baseline is correct but intentionally conservative. Rewrite the loop into a regular, vectorization-friendly form so the compiler and the out-of-order core can extract more throughput.
+
+This is a practical bridge from ILP thinking to SIMD-style optimization, even without explicit intrinsics."
+19,gather-reorder-cache-clustering,Gather Reordering — Cluster Accesses by Cache Region,Medium,Cache Locality,cache locality | gather | reordering | working set | random access,ChampSim · 4-wide OoO · cache locality study,~10s,5,1,3,IPC>1.9 | L1D Avg Miss Latency<24 cyc | LLC MPKI<1.8,True,https://www.leetcpu.com/#/problem/gather-reorder-cache-clustering,"Sum integers from a large array using an index permutation.
+
+The baseline walks the permutation in arrival order, so each iteration may jump to a completely different region of the data array. With a 512 KB data array and indices scattered randomly, most accesses land on cold cache lines, and the CPU stalls waiting for memory on nearly every iteration.
+
+Reorder the accesses internally so indices that point to the same cache-line region are processed together. By sorting or bucketing indices before gathering, you turn a random-access stream into a set of short sequential bursts, allowing the hardware prefetcher to help and dramatically reducing the number of distinct cache lines touched at any moment. You must still read every referenced element exactly once and return the exact total."
+20,masked-saxpy-branchless,"Masked SAXPY — Remove Branches, Unlock Throughput",Medium,Branch Prediction,branchless | SIMD | saxpy | throughput,ChampSim · 8-wide OoO · branch + throughput study,~9s,5,1,2,IPC>3 | Branch MPKI<1.2,True,https://www.leetcpu.com/#/problem/masked-saxpy-branchless,"Apply a masked SAXPY update: if `mask[i]` is 1, do `y[i] = a*x[i] + y[i]`; otherwise leave `y[i]` unchanged.
+
+The baseline uses a branch on every element. With a roughly 50/50 mask, that branch is hard to predict and also makes the hot loop less friendly to vectorization.
+
+Rewrite the loop so it stays exact but becomes branchless and throughput-oriented."
+21,dot-product-eight-accumulators,Dot Product — Eight Accumulators for ILP,Easy,ILP / Pipeline,dot product | accumulators | unrolling | ILP,ChampSim · 8-wide OoO · dependency-chain study,~8s,4,1,2,IPC>3.4 | Branch MPKI<0.5,True,https://www.leetcpu.com/#/problem/dot-product-eight-accumulators,"Compute the dot product of two large float arrays.
+
+The baseline uses one running accumulator, which creates a long floating-point dependency chain. That limits instruction-level parallelism even when data is already streaming nicely from memory.
+
+Break the chain with several independent partial sums, then combine them at the end."
+22,lookup-table-grade-bands,Grade Bands — Replace Nested Branches with a LUT,Easy,Branch Prediction,lookup table | branchless | classification | repeated passes,ChampSim · TAGE-SC-L · branch study,~8s,5,1,2,IPC>2.8 | Branch MPKI<1.5,True,https://www.leetcpu.com/#/problem/lookup-table-grade-bands,"Classify scores into grade bands over many repeated passes.
+
+The baseline uses a nested if/else tree for every score on every pass. With scores spread broadly across the input range, the control flow is less predictable than it needs to be.
+
+Precompute a tiny lookup table once, then turn the hot loop into a simple table lookup and accumulation."

@@ -1,0 +1,6 @@
+# 核心抓取链路零第三方依赖（仅标准库）
+#
+# 可选：
+#   playwright —— 需要点击/滚动/等待 XHR 等交互时启用（见 README「扩展：CDP 交互模式」）
+#   websocket-client —— 需要自研 CDP 通道时启用
+#   brotli     —— 站点若返回 Content-Encoding: br 时用于解压（不装也能跑，自动跳过解压）

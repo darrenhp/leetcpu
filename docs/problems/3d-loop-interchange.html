@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>三维数组：修正循环顺序 · LeetCPU 中文站</title>
+<meta name="description" content="把最快变化的一维放到最内层 —— 步長从 16KB 降到 4 字节。">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232f6feb'/><text x='16' y='23' font-size='19' font-family='monospace' fill='white' text-anchor='middle'>C</text></svg>">
+</head>
+<body data-root="../">
+<header class="topbar">
+  <a class="brand" href="../index.html"><span class="dot">C</span>LeetCPU 中文站</a>
+  <nav class="topnav"><a href="../index.html" class="">概览</a><a href="../modules.html" class="">知识模块</a><a href="../problems.html" class="">全部题目</a></nav>
+  <div class="searchbox">
+    <input id="q" type="search" placeholder="搜索题目 / 模块…" autocomplete="off">
+    <div id="results"></div>
+  </div>
+  <button class="iconbtn" data-theme-toggle title="切换明暗主题">◐</button>
+</header>
+<div class="wrap">
+  <nav class="sidebar"><h4>开始</h4>
+<a href="../index.html" class="">概览</a>
+<a href="../modules.html" class="">知识模块</a>
+<a href="../problems.html" class="">全部题目</a>
+<h4>知识模块</h4>
+<a href="../modules/branch.html" class="">分支预测</a>
+<a href="../modules/cache.html" class="">缓存层次</a>
+<a href="../modules/ilp.html" class="">ILP 与流水线</a>
+<a href="../modules/memory.html" class="">内存层次与延迟隐藏</a>
+<a href="../modules/rob.html" class="">ROB 与乱序执行</a>
+<a href="../modules/frontend.html" class="">前端与指令缓存</a>
+<a href="../modules/tlb.html" class="">TLB 与地址转换</a>
+<a href="../modules/simd.html" class="">SIMD 与向量化</a>
+<h4>题目</h4>
+<h4 style="margin-top:12px">分支预测</h4>
+<a href="../problems/stable-partition-branches.html" class=""><span class="num">01</span>稳定划分：让分支变得可预测</a>
+<a href="../problems/branchless-score-window.html" class=""><span class="num">10</span>区间计分：用无符号技巧消除分支</a>
+<a href="../problems/masked-saxpy-branchless.html" class=""><span class="num">20</span>掩码 SAXPY：去分支换取吞吐</a>
+<a href="../problems/lookup-table-grade-bands.html" class=""><span class="num">22</span>等级分档：用查表替代嵌套分支</a>
+<h4 style="margin-top:12px">缓存层次</h4>
+<a href="../problems/matrix-multiply-tiling.html" class=""><span class="num">02</span>矩阵乘法：分块与转置</a>
+<a href="../problems/particle-struct-repacking.html" class=""><span class="num">08</span>粒子结构体：AoS 转 SoA</a>
+<a href="../problems/image-blur-tiling.html" class=""><span class="num">09</span>图像模糊：让工作集留在缓存里</a>
+<a href="../problems/ece-jacobi-stencil-lab.html" class=""><span class="num">11</span>Jacobi 五点 stencil：二维分块</a>
+<a href="../problems/3d-loop-interchange.html" class="on"><span class="num">14</span>三维数组：修正循环顺序</a>
+<a href="../problems/binary-search-eytzinger.html" class=""><span class="num">15</span>二分查找：Eytzinger 布局 + 预取</a>
+<a href="../problems/row-major-cache-locality.html" class=""><span class="num">17</span>二维网格求和：修正列优先遍历</a>
+<h4 style="margin-top:12px">ILP 与流水线</h4>
+<a href="../problems/reduction-tree-ilp.html" class=""><span class="num">03</span>规约树：打断依赖链</a>
+<a href="../problems/bitset-popcount-throughput.html" class=""><span class="num">07</span>位图统计：用 popcount 硬件替代逐位扫描</a>
+<a href="../problems/histogram-dependency-chains.html" class=""><span class="num">13</span>直方图：打断写依赖链</a>
+<a href="../problems/streaming-square-sum.html" class=""><span class="num">16</span>流式平方和：多累加器提升 ILP</a>
+<a href="../problems/saxpy-auto-vectorize.html" class=""><span class="num">18</span>SAXPY：解锁自动向量化</a>
+<a href="../problems/dot-product-eight-accumulators.html" class=""><span class="num">21</span>点积：八个累加器</a>
+<h4 style="margin-top:12px">内存层次与延迟隐藏</h4>
+<a href="../problems/interleaved-pointer-chasing.html" class=""><span class="num">04</span>指针追逐：恢复内存级并行</a>
+<a href="../problems/strided-sum-prefetch.html" class=""><span class="num">06</span>跨步求和：用预取隐藏延迟</a>
+<a href="../problems/irregular-gather-prefetch.html" class=""><span class="num">12</span>不规则聚集：为随机访问提前预取</a>
+<h4 style="margin-top:12px">ROB 与乱序执行</h4>
+<a href="../problems/bottleneck-triage.html" class=""><span class="num">05</span>瓶颈会诊：一次修好三个问题</a>
+<h4 style="margin-top:12px">TLB 与地址转换</h4>
+<a href="../problems/gather-reorder-cache-clustering.html" class=""><span class="num">19</span>聚集重排：按页聚簇访问</a></nav>
+  <main>
+<div class="meta">
+  <span class="badge">14</span>
+  <span class="badge easy">简单</span>
+  <span class="badge mod" style="background:#5b9cf6">缓存层次</span>
+  <span class="sub">缓存局部性 · GShare BP · 4-wide OoO · 32KB L1</span>
+</div>
+<h1>三维数组：修正循环顺序</h1>
+<p class="lead">把最快变化的一维放到最内层 —— 步長从 16KB 降到 4 字节。</p>
+<p class="sub">原始英文标题：3D Array — Fix Loop Order for Sequential Access</p>
+
+<h2 id="statement">题面</h2>
+<p>对 64×64×64 的整数数组求和。数组按行优先存储：元素 <code>[i][j][k]</code> 位于偏移 <code>i*64*64 + j*64 + k</code>。</p><p>当 k 在最内层变化时，相邻访问在内存中彼此相邻 —— 一条缓存行可覆盖 16 个整数。</p><p>基线却把 i 放在最内层，于是每步跳跃 64×64 = 4096 个整数（16KB），每次访问都要拉一条新的缓存行。</p>
+<div class="callout"><b>任务</b><br>实现 <code>long solve(int *arr, int n)</code>，返回以行优先存于 <code>arr</code> 的 n×n×n 个整数之和，且最内层循环遍历最后一个维度 k。</div>
+
+<h3 id="constraints">约束</h3>
+<ul><li>n = 64（固定，数组为 n×n×n = 262144 个 int）</li><li>arr 行优先：元素 [i][j][k] 位于 arr[i*n*n + j*n + k]</li><li>不允许多线程</li><li>结果必须精确</li></ul>
+
+<h3 id="examples">示例</h3>
+<div class="kv"><div><b>输入</b>64×64×64 行优先 int 数组（共 1MB）</div><div><b>输出</b>全部元素之和</div><div><b>说明</b>仅交换循环顺序即可：数组总量 1MB 虽超出 L1，但顺序扫描能 100% 利用每条缓存行，且硬件预取器可以完美工作。</div></div>
+
+<h2 id="targets">指标目标</h2>
+<table><thead><tr><th style="width:170px">指标</th><th style="width:130px">目标</th><th>含义</th></tr></thead>
+<tbody><tr><td><b>L1 MPKI</b></td><td><code>&lt; 3</code></td><td class="sub">每千条指令的 L1 数据缓存失效次数</td></tr><tr><td><b>IPC</b></td><td><code>&gt; 2.5</code></td><td class="sub">每周期退休指令数</td></tr></tbody></table>
+
+<h2 id="starter">起始代码</h2>
+<div class="codeblock">
+  <div class="codebar"><span class="label">baseline.c</span><button class="copybtn">复制</button></div>
+  <pre data-code="long solve(int *arr, int n) {
+    long sum = 0;
+    /* Bad: i in innermost loop — stride n*n between accesses */
+    for (int k = 0; k &lt; n; k++)
+        for (int j = 0; j &lt; n; j++)
+            for (int i = 0; i &lt; n; i++)
+                sum += arr[i*n*n + j*n + k];
+    return sum;
+}
+"></pre>
+</div>
+
+<h2 id="solution">参考解答</h2>
+<div class="codeblock">
+  <div class="codebar"><span class="label">optimized.c</span><button class="copybtn">复制</button></div>
+  <pre data-code="long solve(int *arr, int n) {
+    long sum = 0;
+    /* Good: k in innermost loop — stride 1 between accesses */
+    for (int i = 0; i &lt; n; i++)
+        for (int j = 0; j &lt; n; j++)
+            for (int k = 0; k &lt; n; k++)
+                sum += arr[i*n*n + j*n + k];
+    return sum;
+}
+"></pre>
+</div>
+
+<h2 id="report">优化报告</h2>
+<table><thead><tr><th style="width:120px">维度</th><th>内容</th></tr></thead><tbody>
+<tr><td><b>核心瓶颈</b></td><td>循环顺序导致的跨步访问</td></tr>
+<tr><td><b>一句话思路</b></td><td>把最快变化的一维放到最内层 —— 步長从 16KB 降到 4 字节。</td></tr>
+<tr><td><b>报告摘要</b></td><td>纯循环交换：把 <code>for k / for j / for i</code> 改成 <code>for i / for j / for k</code>，让最内层沿内存中连续的方向推进。</td></tr>
+</tbody></table>
+
+<h3 id="r1">瓶颈定位</h3><p>基线最内层 <code>sum += arr[i*n*n + j*n + k]</code>，i 变化时地址跳 <code>n*n*4 = 16384</code> 字节。</p><p>整个数组 1MB，远大于 L1；跨步 16KB 意味着每条缓存行只用 4 字节，有效率 1/16。</p><p>更糟的是：16KB 的固定跨步超出多数硬件预取器的识别范围，预取器完全帮不上忙。</p><h3 id="r2">优化思路</h3><p>行优先数组中，最后一维（k）在内存中连续。让 k 成为最内层循环变量，相邻迭代地址只差 4 字节。</p><p>这样每条 64 字节缓存行被连续使用 16 次，利用率 100%。</p><p>顺序流式访问还能被硬件 stride 预取器完美预测，进一步掩盖剩余延迟。</p><h3 id="r3">关键改动</h3><p>三重循环顺序由 k→j→i 改为 i→j→k（循环体完全不变）。</p><p>求和满足交换律，因此改变遍历顺序不影响结果。</p><p>索引表达式 <code>i*n*n + j*n + k</code> 保持不变 —— 编译后内层实际是 <code>base++</code> 的顺序扫描。</p><h3 id="r4">为什么更快</h3><p>缓存行利用率从 4/64 提升到 64/64，等效访存量降为 1/16。</p><p>L1 MPKI 从数十降到个位数，硬件预取器开始生效。</p><p>这是最经典的"零成本优化"：不改数据结构、不改算法，只调整循环嵌套顺序。</p><h3 id="r5">常见误区</h3><p>以为编译器会自动做循环交换：C 编译器通常不敢擅自改变浮点求和顺序；对整数虽可能，但依赖别名分析，不能指望。</p><p>混淆行优先与列优先：Fortran/NumPy 默认列优先，此时最快变化的是<strong>第一维</strong>，方向恰好相反。</p><p>忽略 TLB：跨步 16KB 也会在页面之间跳跃，进一步加剧 TLB 压力。</p>
+
+<div class="callout"><b>要点速记</b><ul style="margin:6px 0 0"><li>循环交换让内层连续访问</li><li>缓存行利用率提升 16 倍</li><li>零成本改动</li></ul></div>
+<div class="callout warn"><b>常见误区与边界条件</b><ul style="margin:6px 0 0"><li>行/列优先语言差异</li><li>不要指望编译器自动交换</li></ul></div>
+
+<div class="pager">
+  <a href="../problems/histogram-dependency-chains.html"><span class="k">← 上一题</span>直方图：打断写依赖链</a>
+  <a class="next" href="../problems/binary-search-eytzinger.html"><span class="k">下一题 →</span>二分查找：Eytzinger 布局 + 预取</a>
+</div>
+</main>
+  <aside class="toc"><h4>本页目录</h4><a href="#statement">题面</a><a href="#constraints">约束</a><a href="#examples">示例</a><a href="#targets">指标目标</a><a href="#starter">起始代码</a><a href="#solution">参考解答</a><a href="#report">优化报告</a><a href="#r1">· 瓶颈定位</a><a href="#r2">· 优化思路</a><a href="#r3">· 关键改动</a><a href="#r4">· 为什么更快</a><a href="#r5">· 常见误区</a></aside>
+</div>
+<footer>
+  本站为 <a href="https://www.leetcpu.com/">leetcpu.com</a> 课程与题目的中文整理版，
+  仅用于学习交流；题目、代码版权归原站所有。内容由程序从公开页面整理并人工撰写优化报告。
+</footer>
+<script src="../assets/search.js"></script>
+<script src="../assets/app.js"></script>
+</body>
+</html>

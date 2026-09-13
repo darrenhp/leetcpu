@@ -1,0 +1,333 @@
+[
+  {
+    "id": "branch",
+    "icon": "BP",
+    "color": "#a78bfa",
+    "title": "Branch Prediction",
+    "tagline": "Helping the CPU guess the future.",
+    "overview": "Modern CPUs execute instructions speculatively — they guess which path a branch will take and start executing before the condition is evaluated. When they guess wrong, they must flush the pipeline, wasting 10–20 cycles. Understanding and eliminating unpredictable branches is one of the highest-leverage optimizations available.",
+    "sections": [
+      {
+        "heading": "How the Pipeline Sees a Branch",
+        "body": "When the CPU hits an if/else or loop condition, it can't wait for the result — it would stall the entire pipeline. Instead, it predicts the outcome using a branch predictor (a hardware state machine trained on past behavior) and speculatively executes that path. If it was wrong, every speculative instruction is squashed."
+      },
+      {
+        "heading": "What Causes Mispredictions",
+        "body": "Data-dependent branches are the main culprit. If the branch outcome depends on input values that vary unpredictably — searching through an unsorted array, for example — the predictor has no pattern to learn. Loop branches on the other hand are usually well-predicted because the exit condition is rare and regular."
+      },
+      {
+        "heading": "How to Fix It",
+        "body": "Sort data before processing it so branches become predictable. Replace conditional assignments with branchless arithmetic (e.g. using bitwise ops or ternary expressions that compile to CMOV). Restructure loops to separate the hot path from the exceptional case."
+      }
+    ],
+    "metrics": [
+      {
+        "key": "Branch Accuracy",
+        "tip": "Target ≥ 97%. Below 90% is critical and dominates your IPC loss."
+      },
+      {
+        "key": "Branch MPKI",
+        "tip": "Mispredicts per 1000 instructions. Each mispredict costs ~15 cycles."
+      },
+      {
+        "key": "IPC Lost to Branch",
+        "tip": "Shown in the IPC stall budget. Directly quantifies the flush penalty."
+      }
+    ],
+    "champsimTip": "Run your code, open Analysis → IPC stall budget. The 'Branch mispredict' bar tells you exactly how many IPC slots are wasted on flushes.",
+    "relatedProblems": [
+      "branch-sort",
+      "branchless-abs"
+    ]
+  },
+  {
+    "id": "cache",
+    "icon": "L1",
+    "color": "#5b9cf6",
+    "title": "Cache Hierarchy",
+    "tagline": "Bringing data close before the CPU needs it.",
+    "overview": "The CPU can execute billions of instructions per second, but main memory (DRAM) takes ~200 cycles to respond. The cache hierarchy — L1 (4 cyc), L2 (12 cyc), LLC (40 cyc) — exists to bridge that gap. Almost every memory-bound bottleneck is caused by poor access patterns that blow out the cache.",
+    "sections": [
+      {
+        "heading": "The Hierarchy",
+        "body": "L1D (~32 KB, ~4 cyc): Fastest, smallest. One cache line miss here is fast if L2 has it. L2 (~256 KB, ~12 cyc): Second tier — handles L1 overflows. LLC / L3 (~6 MB, ~40 cyc): Last line of defense before DRAM. DRAM (~200 cyc): Catastrophically slow. A program that hits DRAM frequently will be bottlenecked no matter how fast the core is."
+      },
+      {
+        "heading": "Spatial & Temporal Locality",
+        "body": "Spatial locality: access memory addresses that are near each other. CPUs load data in 64-byte cache lines — if you access arr[0], arr[1]…arr[7] come for free. Temporal locality: reuse the same data soon after you load it. Looping over a large matrix row-by-row uses spatial locality well; column-by-column destroys it."
+      },
+      {
+        "heading": "How to Fix Cache Misses",
+        "body": "Restructure data layouts so frequently-accessed fields are contiguous (Array of Structs → Struct of Arrays). Tile loops so the working set fits in L1/L2. Use software prefetching (__builtin_prefetch) to hide DRAM latency when access patterns are predictable. Reduce data size — smaller types, bit packing — to keep more data in cache."
+      }
+    ],
+    "metrics": [
+      {
+        "key": "L1D MPKI",
+        "tip": "Misses per 1000 instructions at L1. > 10 is high."
+      },
+      {
+        "key": "LLC MPKI",
+        "tip": "Misses that reach DRAM. > 3 MPKI means you are LLC-bound."
+      },
+      {
+        "key": "DRAM Transactions",
+        "tip": "Total DRAM accesses. High values → bandwidth or latency bottleneck."
+      },
+      {
+        "key": "Avg Miss Latency",
+        "tip": "Cycles per average cache miss — shows how deep in the hierarchy misses go."
+      }
+    ],
+    "champsimTip": "Open Analysis → Cache hierarchy. The waterfall bars show L1→L2→LLC hit rates. A narrow bar at LLC means most misses reach DRAM.",
+    "relatedProblems": [
+      "cache-row",
+      "cache-tile"
+    ]
+  },
+  {
+    "id": "ilp",
+    "icon": "IPC",
+    "color": "#00b8a3",
+    "title": "IPC & Instruction-Level Parallelism",
+    "tagline": "Doing more than one thing per clock cycle.",
+    "overview": "IPC — Instructions Per Cycle — is the primary measure of how efficiently the CPU is using its execution units. A modern 4-wide out-of-order core can retire up to 4 instructions per cycle when there are no dependencies. Long dependency chains, structural hazards, and stalls all reduce IPC.",
+    "sections": [
+      {
+        "heading": "Out-of-Order Execution",
+        "body": "The CPU doesn't execute instructions in the order you write them — it finds independent instructions and runs them simultaneously on different execution units. This is called out-of-order (OoO) execution. The Reorder Buffer (ROB) tracks in-flight instructions and retires them in order. If the ROB fills up waiting on a slow instruction (like a cache miss), all younger instructions are blocked."
+      },
+      {
+        "heading": "Dependency Chains",
+        "body": "A chain where each operation depends on the result of the previous one — e.g. a running sum where each iteration adds to the same accumulator — limits IPC to 1 even on a 4-wide core. Breaking the chain (e.g. using multiple accumulators) lets the CPU overlap iterations and approach peak IPC."
+      },
+      {
+        "heading": "How to Improve IPC",
+        "body": "Unroll loops with multiple accumulators to break carried dependencies. Use SIMD intrinsics to process multiple elements per instruction. Minimize memory stalls (see Cache Hierarchy) and branch mispredictions (see Branch Prediction) — both drain the ROB. Prefer independent computation to long sequential chains."
+      }
+    ],
+    "metrics": [
+      {
+        "key": "IPC",
+        "tip": "Your achieved IPC vs peak (4.0 on a 4-wide OoO). Higher is better."
+      },
+      {
+        "key": "Pipeline Efficiency %",
+        "tip": "IPC / peak IPC. Shows what fraction of issue slots are doing real work."
+      },
+      {
+        "key": "ROB Occupancy",
+        "tip": "High ROB fill means the core is stalled waiting on something (usually memory)."
+      }
+    ],
+    "champsimTip": "Check the IPC stall budget in Analysis. The 'Useful work' segment shows your real IPC; the other segments show what is eating your slots.",
+    "relatedProblems": [
+      "ilp-accum",
+      "ilp-unroll"
+    ]
+  },
+  {
+    "id": "memory",
+    "icon": "LLC",
+    "color": "#ffa116",
+    "title": "Memory Hierarchy & Latency Hiding",
+    "tagline": "Tolerating the gap between CPU speed and DRAM speed.",
+    "overview": "Even with perfect cache usage, some workloads must reach DRAM. The key insight is that latency is not the same as bandwidth — if you can issue enough independent loads, the memory controller can overlap them and deliver high throughput despite high per-request latency. This is called Memory-Level Parallelism (MLP).",
+    "sections": [
+      {
+        "heading": "Latency vs Bandwidth",
+        "body": "A single pointer-chasing load that waits for DRAM will stall the CPU for 200 cycles doing nothing useful. But a loop that streams through a large array in order can sustain near-peak memory bandwidth because the hardware prefetcher recognizes the stride and prefetches ahead. Strided accesses expose bandwidth; random accesses expose latency."
+      },
+      {
+        "heading": "Hardware & Software Prefetching",
+        "body": "The hardware prefetcher automatically detects regular strides (step 1, step 2, step 4…) and prefetches ahead. Irregular accesses require software hints: __builtin_prefetch(ptr + N, 0, 1) tells the CPU to load that cache line now, before you need it. The key is issuing the prefetch early enough (typically 100–200 cycles ahead) that the data arrives just in time."
+      },
+      {
+        "heading": "Row Buffer and DRAM Timing",
+        "body": "DRAM is organized in rows. Accessing the same row repeatedly is fast (row buffer hit). Switching rows (row buffer miss) incurs an extra ~50 ns penalty. Code that accesses DRAM in a strided, row-aligned pattern will see far fewer row buffer misses than code that scatters accesses across rows."
+      }
+    ],
+    "metrics": [
+      {
+        "key": "DRAM Transactions",
+        "tip": "Total DRAM accesses. Minimize by improving cache hit rate."
+      },
+      {
+        "key": "Row Buffer Hit Rate",
+        "tip": "High hit rate = DRAM is being accessed in a friendly pattern."
+      },
+      {
+        "key": "LLC Avg Miss Latency",
+        "tip": "Cycles from LLC miss to data return. High = memory-bound critical path."
+      }
+    ],
+    "champsimTip": "Look at the DRAM section in Analysis. Row Buffer Miss count reveals whether your access pattern is DRAM-friendly or causing frequent row activations.",
+    "relatedProblems": [
+      "memory-prefetch",
+      "memory-stride"
+    ]
+  },
+  {
+    "id": "rob",
+    "icon": "ROB",
+    "color": "#2dd4bf",
+    "title": "ROB & Out-of-Order Execution",
+    "tagline": "How the CPU juggles hundreds of in-flight instructions.",
+    "overview": "The Reorder Buffer (ROB) is the heart of out-of-order execution. It tracks every instruction from dispatch to retirement, allowing the CPU to execute instructions out of order while maintaining the illusion of sequential execution. Understanding ROB pressure is key to diagnosing whether you're compute-bound, memory-bound, or branch-bound.",
+    "sections": [
+      {
+        "heading": "How the ROB Works",
+        "body": "Instructions enter the ROB in order. They execute out of order on available execution units. They retire from the ROB in order once complete. If the oldest instruction in the ROB is waiting (e.g. for a cache miss), nothing can retire, the ROB fills up, and the front-end stalls — even if dozens of other instructions could execute right now."
+      },
+      {
+        "heading": "Reading ROB Occupancy",
+        "body": "ROB occupancy at mispredict tells you how full the ROB was when a branch misprediction was detected — all those instructions get squashed. High ROB occupancy (> 70%) during a mispredict means the CPU was deeply speculated: you likely have a memory-bound + branch-bound compound bottleneck."
+      },
+      {
+        "heading": "Diagnosing with ROB Metrics",
+        "body": "Low IPC + high ROB occupancy = memory-bound (ROB full, waiting on loads). Low IPC + low ROB occupancy = frontend-bound or branch-bound (ROB draining via mispredicts or not filling fast enough). High IPC + low ROB occupancy = compute-bound (near-optimal, limited by execution unit throughput)."
+      }
+    ],
+    "metrics": [
+      {
+        "key": "ROB Occupancy at Mispredict",
+        "tip": "How many instructions were in-flight when a mispredict was caught. High = deeply speculated."
+      },
+      {
+        "key": "IPC",
+        "tip": "Combined effect — ROB health directly drives IPC."
+      },
+      {
+        "key": "Slots Utilised %",
+        "tip": "What fraction of ROB slots are doing real work vs waiting."
+      }
+    ],
+    "champsimTip": "The ROB Occupancy card in Analysis shows entries used at mispredict time. Combine it with the IPC stall budget to distinguish memory-bound from branch-bound stalls.",
+    "relatedProblems": [
+      "rob-pressure"
+    ]
+  },
+  {
+    "id": "frontend",
+    "icon": "FE",
+    "color": "#ef4743",
+    "title": "Frontend & Instruction Cache",
+    "tagline": "Keeping the CPU fed with the next instructions.",
+    "overview": "The frontend is responsible for fetching, predicting, and decoding instructions before the backend can execute them. When the instruction cache, BTB, or decode path falls behind, the whole core starves even if execution units are available.",
+    "sections": [
+      {
+        "heading": "What the Frontend Does",
+        "body": "Before any instruction can execute, the CPU must fetch it from the instruction cache, predict control flow, and decode it into operations the backend can schedule. A frontend bottleneck means the backend has nothing ready to execute."
+      },
+      {
+        "heading": "Why Frontend Stalls Happen",
+        "body": "Large code footprints, too many unpredictable branches, and poor instruction locality can all hurt fetch efficiency. If hot code does not fit well in the instruction cache, the core spends cycles waiting for instructions instead of doing useful work."
+      },
+      {
+        "heading": "How to Improve It",
+        "body": "Keep hot loops compact, reduce unnecessary branching, inline carefully, and separate cold error paths from hot execution paths. Better code layout often improves both branch prediction and instruction-cache behavior at the same time."
+      }
+    ],
+    "metrics": [
+      {
+        "key": "Frontend Stall %",
+        "tip": "High values mean fetch/decode is starving the backend."
+      },
+      {
+        "key": "L1I MPKI",
+        "tip": "Instruction-cache misses per 1000 instructions."
+      },
+      {
+        "key": "Useful IPC",
+        "tip": "Low IPC with frontend stalls often means the core is underfed."
+      }
+    ],
+    "champsimTip": "Use the stall breakdown first. If useful IPC is low but memory metrics look reasonable, inspect frontend pressure and code layout.",
+    "relatedProblems": [
+      "frontend-hotloop",
+      "frontend-code-layout"
+    ]
+  },
+  {
+    "id": "tlb",
+    "icon": "TLB",
+    "color": "#2dd4bf",
+    "title": "TLB & Address Translation",
+    "tagline": "The hidden cache behind every memory access.",
+    "overview": "Every load and store starts with virtual-to-physical address translation. The TLB caches those translations; when it misses, the CPU must walk page tables, adding extra latency on top of normal cache access.",
+    "sections": [
+      {
+        "heading": "Why TLBs Matter",
+        "body": "Even if your data is cache-friendly, translation misses still slow memory access. Workloads with large footprints, poor locality across pages, or scattered access patterns can spend surprising time on address translation."
+      },
+      {
+        "heading": "What Causes TLB Misses",
+        "body": "Large arrays touched sparsely, pointer-heavy structures, and random access across many pages all increase TLB pressure. A workload can have decent cache behavior and still suffer because translations are constantly being reloaded."
+      },
+      {
+        "heading": "How to Reduce TLB Pressure",
+        "body": "Improve page locality, traverse memory more sequentially, compact data structures, and avoid unnecessary indirection. Data layouts that help caches usually help TLBs too, especially when accesses stay inside a smaller page working set."
+      }
+    ],
+    "metrics": [
+      {
+        "key": "dTLB Miss Rate",
+        "tip": "Translation misses on data accesses."
+      },
+      {
+        "key": "Page Working Set",
+        "tip": "How many pages the hot path touches repeatedly."
+      },
+      {
+        "key": "Avg Memory Access Latency",
+        "tip": "Can rise when translation overhead stacks on top of cache misses."
+      }
+    ],
+    "champsimTip": "If cache metrics alone do not explain the slowdown, check whether the access pattern spreads work across too many pages.",
+    "relatedProblems": [
+      "tlb-stride",
+      "tlb-pointer-chase"
+    ]
+  },
+  {
+    "id": "simd",
+    "icon": "SIMD",
+    "color": "#00b8a3",
+    "title": "SIMD & Vectorization",
+    "tagline": "Doing the same work on many values at once.",
+    "overview": "SIMD boosts throughput by applying one instruction to multiple data elements in parallel. When a loop has regular structure and independent work per element, vectorization can dramatically increase useful work per cycle.",
+    "sections": [
+      {
+        "heading": "When SIMD Works Best",
+        "body": "Vectorization shines on loops that apply the same operation across arrays or matrix regions. Regular memory access, aligned data, and few loop-carried dependencies make auto-vectorization much more likely to succeed."
+      },
+      {
+        "heading": "What Blocks Vectorization",
+        "body": "Branches inside tight loops, pointer aliasing, irregular access patterns, and dependency chains often prevent the compiler from emitting vector instructions. Even when vector code exists, poor alignment and cache behavior can limit the gain."
+      },
+      {
+        "heading": "How to Encourage It",
+        "body": "Write regular loops, use contiguous arrays, reduce inner-loop conditionals, and help the compiler with clear data dependencies. Combine vectorization with loop unrolling and cache-friendly layouts for the biggest win."
+      }
+    ],
+    "metrics": [
+      {
+        "key": "IPC",
+        "tip": "Often rises when vectorization increases throughput."
+      },
+      {
+        "key": "Instructions Retired",
+        "tip": "May fall as each instruction does more work."
+      },
+      {
+        "key": "Memory Throughput",
+        "tip": "Vectorization can expose memory bottlenecks if compute stops being the limit."
+      }
+    ],
+    "champsimTip": "Compare IPC and memory behavior before and after the change. A good SIMD optimization often shifts the bottleneck from compute to memory.",
+    "relatedProblems": [
+      "simd-reduce",
+      "simd-map"
+    ]
+  }
+]

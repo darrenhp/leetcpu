@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>粒子结构体：AoS 转 SoA · LeetCPU 中文站</title>
+<meta name="description" content="把结构体数组拆成并列的字段数组，为展开与向量化铺路。">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232f6feb'/><text x='16' y='23' font-size='19' font-family='monospace' fill='white' text-anchor='middle'>C</text></svg>">
+</head>
+<body data-root="../">
+<header class="topbar">
+  <a class="brand" href="../index.html"><span class="dot">C</span>LeetCPU 中文站</a>
+  <nav class="topnav"><a href="../index.html" class="">概览</a><a href="../modules.html" class="">知识模块</a><a href="../problems.html" class="">全部题目</a></nav>
+  <div class="searchbox">
+    <input id="q" type="search" placeholder="搜索题目 / 模块…" autocomplete="off">
+    <div id="results"></div>
+  </div>
+  <button class="iconbtn" data-theme-toggle title="切换明暗主题">◐</button>
+</header>
+<div class="wrap">
+  <nav class="sidebar"><h4>开始</h4>
+<a href="../index.html" class="">概览</a>
+<a href="../modules.html" class="">知识模块</a>
+<a href="../problems.html" class="">全部题目</a>
+<h4>知识模块</h4>
+<a href="../modules/branch.html" class="">分支预测</a>
+<a href="../modules/cache.html" class="">缓存层次</a>
+<a href="../modules/ilp.html" class="">ILP 与流水线</a>
+<a href="../modules/memory.html" class="">内存层次与延迟隐藏</a>
+<a href="../modules/rob.html" class="">ROB 与乱序执行</a>
+<a href="../modules/frontend.html" class="">前端与指令缓存</a>
+<a href="../modules/tlb.html" class="">TLB 与地址转换</a>
+<a href="../modules/simd.html" class="">SIMD 与向量化</a>
+<h4>题目</h4>
+<h4 style="margin-top:12px">分支预测</h4>
+<a href="../problems/stable-partition-branches.html" class=""><span class="num">01</span>稳定划分：让分支变得可预测</a>
+<a href="../problems/branchless-score-window.html" class=""><span class="num">10</span>区间计分：用无符号技巧消除分支</a>
+<a href="../problems/masked-saxpy-branchless.html" class=""><span class="num">20</span>掩码 SAXPY：去分支换取吞吐</a>
+<a href="../problems/lookup-table-grade-bands.html" class=""><span class="num">22</span>等级分档：用查表替代嵌套分支</a>
+<h4 style="margin-top:12px">缓存层次</h4>
+<a href="../problems/matrix-multiply-tiling.html" class=""><span class="num">02</span>矩阵乘法：分块与转置</a>
+<a href="../problems/particle-struct-repacking.html" class="on"><span class="num">08</span>粒子结构体：AoS 转 SoA</a>
+<a href="../problems/image-blur-tiling.html" class=""><span class="num">09</span>图像模糊：让工作集留在缓存里</a>
+<a href="../problems/ece-jacobi-stencil-lab.html" class=""><span class="num">11</span>Jacobi 五点 stencil：二维分块</a>
+<a href="../problems/3d-loop-interchange.html" class=""><span class="num">14</span>三维数组：修正循环顺序</a>
+<a href="../problems/binary-search-eytzinger.html" class=""><span class="num">15</span>二分查找：Eytzinger 布局 + 预取</a>
+<a href="../problems/row-major-cache-locality.html" class=""><span class="num">17</span>二维网格求和：修正列优先遍历</a>
+<h4 style="margin-top:12px">ILP 与流水线</h4>
+<a href="../problems/reduction-tree-ilp.html" class=""><span class="num">03</span>规约树：打断依赖链</a>
+<a href="../problems/bitset-popcount-throughput.html" class=""><span class="num">07</span>位图统计：用 popcount 硬件替代逐位扫描</a>
+<a href="../problems/histogram-dependency-chains.html" class=""><span class="num">13</span>直方图：打断写依赖链</a>
+<a href="../problems/streaming-square-sum.html" class=""><span class="num">16</span>流式平方和：多累加器提升 ILP</a>
+<a href="../problems/saxpy-auto-vectorize.html" class=""><span class="num">18</span>SAXPY：解锁自动向量化</a>
+<a href="../problems/dot-product-eight-accumulators.html" class=""><span class="num">21</span>点积：八个累加器</a>
+<h4 style="margin-top:12px">内存层次与延迟隐藏</h4>
+<a href="../problems/interleaved-pointer-chasing.html" class=""><span class="num">04</span>指针追逐：恢复内存级并行</a>
+<a href="../problems/strided-sum-prefetch.html" class=""><span class="num">06</span>跨步求和：用预取隐藏延迟</a>
+<a href="../problems/irregular-gather-prefetch.html" class=""><span class="num">12</span>不规则聚集：为随机访问提前预取</a>
+<h4 style="margin-top:12px">ROB 与乱序执行</h4>
+<a href="../problems/bottleneck-triage.html" class=""><span class="num">05</span>瓶颈会诊：一次修好三个问题</a>
+<h4 style="margin-top:12px">TLB 与地址转换</h4>
+<a href="../problems/gather-reorder-cache-clustering.html" class=""><span class="num">19</span>聚集重排：按页聚簇访问</a></nav>
+  <main>
+<div class="meta">
+  <span class="badge">08</span>
+  <span class="badge medium">中等</span>
+  <span class="badge mod" style="background:#5b9cf6">缓存层次</span>
+  <span class="sub">缓存局部性 · ChampSim · 48KB L1D · bandwidth study</span>
+</div>
+<h1>粒子结构体：AoS 转 SoA</h1>
+<p class="lead">把结构体数组拆成并列的字段数组，为展开与向量化铺路。</p>
+<p class="sub">原始英文标题：Particle Score — Repack Structs for Bandwidth</p>
+
+<h2 id="statement">题面</h2>
+<p>每个粒子以数组-of-structs（AoS）布局存放 4 个 float 字段。计算只用到每个粒子的 <code>x*w + y*z</code> 表达式，但基线的处理方式没有把带宽和指令吞吐吃满。</p><p>请把热字段重排成更紧凑的布局，或重构循环，让 CPU 更高效地流式处理数据与运算。</p>
+<div class="callout"><b>任务</b><br>实现 <code>float solve(Particle *p, int n)</code>，返回全部 n 个粒子的 <code>sum(p[i].x * p[i].w + p[i].y * p[i].z)</code>。</div>
+
+<h3 id="constraints">约束</h3>
+<ul><li>n = 200000</li><li>不允许多线程</li><li>允许 SIMD</li><li>不得修改粒子数值</li></ul>
+
+<h3 id="examples">示例</h3>
+<div class="kv"><div><b>输入</b>p = 200,000 个 Particle（每个 4 个 float，共 16 字节）</div><div><b>输出</b>全部粒子的 <code>x*w + y*z</code> 之和</div><div><b>说明</b>200,000 × 16B = 3.2MB，已超出常见 L2 容量，因此这是一道典型的带宽受限题目。</div></div>
+
+<h2 id="targets">指标目标</h2>
+<table><thead><tr><th style="width:170px">指标</th><th style="width:130px">目标</th><th>含义</th></tr></thead>
+<tbody><tr><td><b>IPC</b></td><td><code>&gt; 2.6</code></td><td class="sub">每周期退休指令数</td></tr><tr><td><b>L1 MPKI</b></td><td><code>&lt; 4</code></td><td class="sub">每千条指令的 L1 数据缓存失效次数</td></tr></tbody></table>
+
+<h2 id="starter">起始代码</h2>
+<div class="codeblock">
+  <div class="codebar"><span class="label">baseline.c</span><button class="copybtn">复制</button></div>
+  <pre data-code="typedef struct Particle {
+    float x, y, z, w;
+} Particle;
+
+float solve(Particle *p, int n) {
+    float total = 0.0f;
+    for (int i = 0; i &lt; n; i++) {
+        total += p[i].x * p[i].w + p[i].y * p[i].z;
+    }
+    return total;
+}
+"></pre>
+</div>
+
+<h2 id="solution">参考解答</h2>
+<div class="codeblock">
+  <div class="codebar"><span class="label">optimized.c</span><button class="copybtn">复制</button></div>
+  <pre data-code="#include &lt;stdlib.h&gt;
+
+typedef struct Particle {
+    float x, y, z, w;
+} Particle;
+
+float solve(Particle *p, int n) {
+    float *xs = (float *)malloc((size_t)n * sizeof(float));
+    float *ys = (float *)malloc((size_t)n * sizeof(float));
+    float *zs = (float *)malloc((size_t)n * sizeof(float));
+    float *ws = (float *)malloc((size_t)n * sizeof(float));
+    if (!xs || !ys || !zs || !ws)
+        return 0.0f;
+
+    for (int i = 0; i &lt; n; i++) {
+        xs[i] = p[i].x;
+        ys[i] = p[i].y;
+        zs[i] = p[i].z;
+        ws[i] = p[i].w;
+    }
+
+    float a0 = 0.0f, a1 = 0.0f, a2 = 0.0f, a3 = 0.0f;
+    int i = 0;
+    for (; i &lt;= n - 4; i += 4) {
+        a0 += xs[i + 0] * ws[i + 0] + ys[i + 0] * zs[i + 0];
+        a1 += xs[i + 1] * ws[i + 1] + ys[i + 1] * zs[i + 1];
+        a2 += xs[i + 2] * ws[i + 2] + ys[i + 2] * zs[i + 2];
+        a3 += xs[i + 3] * ws[i + 3] + ys[i + 3] * zs[i + 3];
+    }
+
+    for (; i &lt; n; i++)
+        a0 += xs[i] * ws[i] + ys[i] * zs[i];
+
+    free(xs);
+    free(ys);
+    free(zs);
+    free(ws);
+    return a0 + a1 + a2 + a3;
+}
+"></pre>
+</div>
+
+<h2 id="report">优化报告</h2>
+<table><thead><tr><th style="width:120px">维度</th><th>内容</th></tr></thead><tbody>
+<tr><td><b>核心瓶颈</b></td><td>带宽与 ILP</td></tr>
+<tr><td><b>一句话思路</b></td><td>把结构体数组拆成并列的字段数组，为展开与向量化铺路。</td></tr>
+<tr><td><b>报告摘要</b></td><td>把 AoS 拆成 4 条独立的 SoA 数组（xs/ys/zs/ws），再用 4 路展开 + 4 累加器让乘法与加法并行执行。</td></tr>
+</tbody></table>
+
+<h3 id="r1">瓶颈定位</h3><p>数据总量 200,000 × 16B = 3.2MB，远超 L1 与多数 L2，因此这是<strong>带宽受限</strong>负载。</p><p>基线每次迭代做 2 次乘、1 次加、1 次累加，而 <code>total</code> 的累加链让 4 周期的浮点加法延迟无法被掩盖。</p><p>也就是说：带宽吃不满 + 依赖链拖后腿，两个问题叠加。</p><h3 id="r2">优化思路</h3><p><strong>AoS → SoA</strong>：把 x/y/z/w 拆成四条独立数组。本题四个字段都要用，单看带宽收益有限；真正的价值在于让展开后的访问模式变成四条连续流，编译器更容易生成向量指令。</p><p><strong>多累加器</strong>：4 个累加器把累加链拆成 4 条，掩盖浮点加法延迟。</p><p><strong>4 路展开</strong>：每次迭代处理 4 个粒子，摊薄循环开销。</p><h3 id="r3">关键改动</h3><p>预处理阶段四趟顺序扫描，把 p[i] 的四个字段分别写入 xs/ys/zs/ws。</p><p>主循环对四个粒子分别用独立累加器计算，最后合并。</p><p>尾部循环处理 n % 4 的余数。</p><h3 id="r4">为什么更快 —— 也说说它的局限</h3><p>主要收益来自<strong>多累加器与展开</strong>，而非布局转换本身：这里四个字段全部参与计算，SoA 并不能减少搬运的字节数。</p><p>SoA 的真正价值在两类场景：①只用部分字段时（如只用 x 和 y），可把带宽降到 1/2；②为 SIMD 提供连续同构的数据流。</p><p>工程上更稳的做法是直接用 SIMD intrinsics 对 AoS 做 4 路加载与重排，避免额外的 4 条临时数组（3.2MB 内存开销）。</p><h3 id="r5">常见误区</h3><p>以为 AoS→SoA 永远更快：若所有字段都要用且不做向量化，转换的拷贝成本可能大于收益。</p><p>忽略内存开销：本题额外分配 4 × 800KB，在内存紧张场景需权衡。</p><p>忘记释放：参考实现中 malloc 的数组必须 free，否则批量调用会泄漏。</p>
+
+<div class="callout"><b>要点速记</b><ul style="margin:6px 0 0"><li>AoS → SoA 为向量化铺路</li><li>4 累加器掩盖浮点延迟</li><li>诚实看待布局转换的真实收益</li></ul></div>
+<div class="callout warn"><b>常见误区与边界条件</b><ul style="margin:6px 0 0"><li>全字段使用时收益有限</li><li>额外内存分配需权衡</li></ul></div>
+
+<div class="pager">
+  <a href="../problems/bitset-popcount-throughput.html"><span class="k">← 上一题</span>位图统计：用 popcount 硬件替代逐位扫描</a>
+  <a class="next" href="../problems/image-blur-tiling.html"><span class="k">下一题 →</span>图像模糊：让工作集留在缓存里</a>
+</div>
+</main>
+  <aside class="toc"><h4>本页目录</h4><a href="#statement">题面</a><a href="#constraints">约束</a><a href="#examples">示例</a><a href="#targets">指标目标</a><a href="#starter">起始代码</a><a href="#solution">参考解答</a><a href="#report">优化报告</a><a href="#r1">· 瓶颈定位</a><a href="#r2">· 优化思路</a><a href="#r3">· 关键改动</a><a href="#r4">· 为什么更快 —— 也说说它的局限</a><a href="#r5">· 常见误区</a></aside>
+</div>
+<footer>
+  本站为 <a href="https://www.leetcpu.com/">leetcpu.com</a> 课程与题目的中文整理版，
+  仅用于学习交流；题目、代码版权归原站所有。内容由程序从公开页面整理并人工撰写优化报告。
+</footer>
+<script src="../assets/search.js"></script>
+<script src="../assets/app.js"></script>
+</body>
+</html>

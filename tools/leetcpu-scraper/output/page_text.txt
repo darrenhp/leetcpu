@@ -1,0 +1,97 @@
+LeetCPU — CPU Performance Training with ChampSim
+LeetCPU
+Learn
+Feedback
+Problems
+Docs
+Sign In
+ChampSim-backed CPU performance training
+Write C. Understand the CPU.
+A playground for exploring and optimizing CPU performance—branch prediction, cache locality, ILP, and memory hierarchy.
+Start Challenge
+View Docs
+solution.c — Stable Partition for Predictable Branches
+#include <stdlib.h>
+​
+#define N 100000
+#define REPEATS 100
+​
+long solve(int *arr, int n) {
+int *tmp = (int*)malloc((size_t)n * sizeof(int));
+int left = 0;
+int right = 0;
+​
+for (int i = 0; i < n; i++)
+if (arr[i] <= 128)
+...
+22
+Core challenges
+12
+Metrics surfaced
+<10s
+Typical feedback loop
+C + ChampSim
+Workflow
+ChampSim-backed
+Interactive labs
+Assembly inspection
+Performance onboarding
+Learn CPU behavior by changing real code.
+Each challenge targets a concrete CPU concept. Your code runs on ChampSim so you can connect source changes to IPC, misses, and branch behavior.
+BP
+Branch Prediction
+Train engineers to reason about branch predictors with code they can rewrite and rerun.
+L1
+Cache Optimization
+Make locality visible with L1, LLC, and throughput targets tied to the same workload.
+IPC
+ILP & Pipelining
+Turn abstract instruction-level parallelism into hands-on optimization reps.
+LLC
+Memory Hierarchy
+Practice latency hiding and memory-level parallelism on realistic bottlenecks.
+How it works
+01
+Read the brief
+Understand the CPU concept — branch predictability, cache locality, ILP, or memory latency.
+02
+Write your fix
+Edit the C code in the browser editor. Focus on data layout, loop structure, and access pattern.
+03
+Run simulation
+Your code compiles and runs on ChampSim — 200M instructions, cycle-accurate.
+04
+Beat the targets
+Hit IPC, cache MPKI, and branch targets. Then inspect counters and assembly to see why.
+CPU Optimization Flow
+1
+Write Code
+Edit & Submit
+2
+Compile & Inspect
+gcc / Objdump
+3
+Trace Execution
+Intel PIN Trace
+4
+Simulate in ChampSim
+Microarchitecture
+5
+View Metrics
+IPC | MPKI | ROB
+6
+AI Insights
+Bottleneck Analysis
+Designed for real performance work.
+The product focuses on clear tasks, measurable outcomes, and a workflow that feels familiar to engineers.
+Hiring exercises
+Evaluate low-level reasoning with tasks that measure more than correctness.
+Team training
+Give systems engineers repeatable labs tied to branch behavior, locality, and memory stalls.
+Concrete feedback
+Connect every code change to counters, throughput, and generated assembly.
+Ready to optimize?
+Explore CPU optimization challenges with fast, simulator-backed feedback.
+Start solving
+Explore docs
+© 2026 LeetCPU. All rights reserved.

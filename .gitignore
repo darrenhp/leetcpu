@@ -1,0 +1,11 @@
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# 抓取器中间缓存：可由 tools/leetcpu-scraper 重新生成，不入库
+tools/leetcpu-scraper/output/_cache/
+tools/leetcpu-scraper/output/raw/
+tools/leetcpu-scraper/output/snapshot.json
