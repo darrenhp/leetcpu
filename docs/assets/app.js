@@ -5,8 +5,8 @@
   /* ---------- 主题 ---------- */
   const THEME_KEY = "leetcpu-theme";
   const saved = localStorage.getItem(THEME_KEY);
-  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  document.documentElement.dataset.theme = saved || (prefersDark ? "dark" : "light");
+  // 默认浅色主题：不跟随系统的 prefers-color-scheme，仅在用户手动切换后记住选择。
+  document.documentElement.dataset.theme = saved || "light";
 
   document.querySelectorAll("[data-theme-toggle]").forEach((btn) => {
     btn.addEventListener("click", () => {
