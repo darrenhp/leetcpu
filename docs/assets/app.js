@@ -3,7 +3,7 @@
   "use strict";
 
   /* ---------- 主题 ---------- */
-  const THEME_KEY = "leetcpu-cn-theme";
+  const THEME_KEY = "leetcpu-theme";
   const saved = localStorage.getItem(THEME_KEY);
   const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   document.documentElement.dataset.theme = saved || (prefersDark ? "dark" : "light");
@@ -126,10 +126,12 @@
       return hay.includes(q);
     }).slice(0, 12);
     if (!items.length) { box.innerHTML = '<div class="empty">没有匹配的内容</div>'; return; }
+    // 索引里的 url 是相对站点根的，子页面（如 problems/xxx.html）要补上 data-root
+    const root = document.body.dataset.root || "";
     box.innerHTML = items.map((it) => `
-      <a href="${it.url}">
+      <a href="${root}${it.url}">
         <div class="t">${it.zh}</div>
-        <div class="d">${it.kind} · ${it.mod || ""} ${it.bottleneck ? "· " + it.bottleneck : ""}</div>
+        <div class="d"><span class="kind" data-kind="${it.kind}">${it.kind}</span>${it.mod ? " · " + it.mod : ""}${it.bottleneck ? " · " + it.bottleneck : ""}</div>
       </a>`).join("");
   }
 

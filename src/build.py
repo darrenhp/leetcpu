@@ -39,6 +39,9 @@ def _data(name: str) -> Path:
 PROBLEMS_JSON = _data("problems.json")
 CURRICULUM_JSON = _data("dataset_curriculum.json")
 
+# 扩展阅读：Markdown 源文件目录（新增文章只需往这里丢 .md）
+READING_DIR = HERE / "content" / "reading"
+
 DIFF = {"Easy": "简单", "Medium": "中等", "Hard": "困难"}
 CAT = {
     "Branch Prediction": "分支预测",
@@ -67,15 +70,47 @@ def esc(s: str) -> str:
 
 
 def md_inline(s: str) -> str:
-    """支持 `code` 与 **bold** 两种行内标记。"""
+    """支持 `code`、`**bold**`、`*italic*` 与 [citation:N] 来源标注。
+
+    行内代码先被摘出暂存，避免代码块里的 `*` / `[...]`（如 `float *A`）
+    被后续的斜体或角标规则误伤。
+    """
     out = html.escape(str(s), quote=False)
-    out = re.sub(r"`([^`]+)`", r'<code>\1</code>', out)
-    out = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", out)
-    return out
+
+    codes: list[str] = []
+
+    def _stash(m: "re.Match[str]") -> str:
+        codes.append(m.group(1))
+        return f"\x00{len(codes) - 1}\x00"
+
+    out = re.sub(r"`([^`]+)`", _stash, out)
+    out = re.sub(r"\*\*([^*\n]+)\*\*", r"<strong>\1</strong>", out)
+    # 斜体：定界 * 必须紧邻非单词字符，且内容首尾不留空白。
+    # 这样 `arr[i*n*n + j*n + k]` 这类乘法表达式不会被误判成斜体。
+    out = re.sub(r"(?<![*\w])\*(?!\s)([^*\n]+?)(?<!\s)\*(?![\w*])", r"<em>\1</em>", out)
+    out = re.sub(r"\[citation:(\d+)\]", r'<sup class="cite">[\1]</sup>', out)
+    return re.sub(r"\x00(\d+)\x00",
+                  lambda m: f"<code>{codes[int(m.group(1))]}</code>", out)
 
 
 def slug_anchor(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-") or "sec"
+
+
+def heading_anchor(text: str, seq: int, used: set) -> str:
+    """生成非空且不重复的标题锚点。
+
+    slug_anchor() 会把中文整段吞掉并退化成 "sec"，多个中文标题会撞车；
+    这里退化为 "sec-<序号>"，保证任意语言的标题都有唯一锚点。
+    """
+    base = slug_anchor(text)
+    if not base or base == "sec" or base in used:
+        base = f"sec-{seq}"
+    while base in used:                       # 极端兜底：仍冲突则递增序号
+        seq += 1
+        base = f"sec-{seq}"
+    used.add(base)
+    return base
 
 
 def codeblock(label: str, code: str, note: str = "") -> str:
@@ -83,6 +118,208 @@ def codeblock(label: str, code: str, note: str = "") -> str:
   <div class="codebar"><span class="label">{esc(label)}</span><button class="copybtn">复制</button></div>
   <pre data-code="{html.escape(code, quote=True)}"></pre>
 </div>""" + (f'<p class="sub">{md_inline(note)}</p>' if note else "")
+
+
+# ---------------------------------------------------------------- Markdown
+# 极简 Markdown 渲染器（纯标准库）。只覆盖本站文章实际用到的语法，
+# 目标是可预期、容错（孤立 ">"、未闭合围栏、缩进列表都不抛异常）。
+RE_FENCE = re.compile(r"^```")
+RE_HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
+RE_HR = re.compile(r"^(-{3,}|\*{3,}|_{3,})$")
+RE_ULI = re.compile(r"^[-*+]\s+")
+RE_OLI = re.compile(r"^\d+[.)]\s+")
+RE_BQ = re.compile(r"^\s*>\s?")
+RE_TABLE_SEP = re.compile(r"^\|?[\s:|-]*-[\s:|-]*$")
+
+
+def _split_cells(line: str) -> list:
+    """切分 GFM 管道表格的一行。"""
+    s = line.strip()
+    if s.startswith("|"):
+        s = s[1:]
+    if s.endswith("|"):
+        s = s[:-1]
+    return [c.strip() for c in s.split("|")]
+
+
+def _render_table(header: list, rows: list) -> str:
+    """渲染表格；行数不足表头时补空单元格，保证 HTML 结构完整。"""
+    th = "".join(f"<th>{md_inline(c)}</th>" for c in header)
+    trs = []
+    for r in rows:
+        cells = list(r) + [""] * (len(header) - len(r))
+        trs.append("<tr>" + "".join(f"<td>{md_inline(c)}</td>" for c in cells) + "</tr>")
+    return (f'<table><thead><tr>{th}</tr></thead><tbody>'
+            f'{"".join(trs)}</tbody></table>')
+
+
+def _md_blocks(lines: list, ctx: dict) -> str:
+    """把 Markdown 行序列渲染成 HTML 片段。"""
+    out: list = []
+    i, n = 0, len(lines)
+
+    def _is_block_start(s: str) -> bool:
+        return bool(s and (RE_FENCE.match(s) or RE_HEADING.match(s) or RE_HR.match(s)
+                           or s.startswith("|") or s.startswith(">")
+                           or RE_ULI.match(s) or RE_OLI.match(s)))
+
+    while i < n:
+        line = lines[i]
+        s = line.strip()
+
+        if not s:                                          # 空行
+            i += 1
+            continue
+
+        if RE_FENCE.match(s):                              # 围栏代码块
+            lang = s[3:].strip() or "text"
+            buf = []
+            i += 1
+            while i < n and not RE_FENCE.match(lines[i].strip()):
+                buf.append(lines[i])
+                i += 1
+            i += 1                                         # 跳过收尾围栏（缺失也容错）
+            out.append(codeblock(lang, "\n".join(buf)))
+            continue
+
+        m = RE_HEADING.match(s)                            # ATX 标题
+        if m:
+            level = len(m.group(1))
+            text = m.group(2).strip()
+            ctx["seq"] += 1
+            anchor = heading_anchor(text, ctx["seq"], ctx["used"])
+            out.append(f'<h{level} id="{anchor}">{md_inline(text)}</h{level}>')
+            if level in (2, 3):
+                ctx["toc"].append((level, text, anchor))
+            i += 1
+            continue
+
+        if RE_HR.match(s):                                 # 水平分隔线
+            out.append("<hr>")
+            i += 1
+            continue
+
+        # GFM 管道表格：当前行以 | 开头，且下一行是 |---| 分隔行
+        if (s.startswith("|") and i + 1 < n
+                and lines[i + 1].strip().startswith("|")
+                and RE_TABLE_SEP.match(lines[i + 1].strip())):
+            header = _split_cells(s)
+            i += 2
+            rows = []
+            while i < n and lines[i].strip().startswith("|"):
+                rows.append(_split_cells(lines[i]))
+                i += 1
+            out.append(_render_table(header, rows))
+            continue
+
+        if s.startswith(">"):                              # 引用块：连续行合并
+            buf = []
+            while i < n and lines[i].strip().startswith(">"):
+                buf.append(RE_BQ.sub("", lines[i], count=1))
+                i += 1
+            out.append("<blockquote>" + _md_blocks(buf, ctx) + "</blockquote>")
+            continue
+
+        if RE_ULI.match(s) or RE_OLI.match(s):             # 列表
+            ordered = bool(RE_OLI.match(s))
+            pat = RE_OLI if ordered else RE_ULI
+            items = []
+            while i < n:
+                ls = lines[i].strip()
+                if pat.match(ls):
+                    items.append(pat.sub("", ls, count=1))
+                    i += 1
+                elif ls and items and not _is_block_start(ls):
+                    items[-1] += " " + ls                  # 续行并入上一项
+                    i += 1
+                else:
+                    break
+            tag = "ol" if ordered else "ul"
+            out.append(f'<{tag}>' + "".join(f"<li>{md_inline(x)}</li>" for x in items)
+                       + f"</{tag}>")
+            continue
+
+        buf = []                                           # 段落
+        while i < n:
+            ls = lines[i].strip()
+            if not ls or _is_block_start(ls):
+                break
+            buf.append(ls)
+            i += 1
+        if buf:
+            out.append("<p>" + md_inline(" ".join(buf)) + "</p>")
+            continue
+
+        i += 1
+
+    return "\n".join(out)
+
+
+def md_render(text: str, toc: list = None) -> str:
+    """把 Markdown 文本渲染成 HTML。
+
+    Args:
+        text: Markdown 正文（不含 front matter）。
+        toc: 可选的可变列表；传入时会收集 (层级, 标题, 锚点) 用于生成目录。
+
+    Returns:
+        渲染后的 HTML 字符串。
+    """
+    ctx: dict = {"seq": 0, "used": set(), "toc": toc if toc is not None else []}
+    return _md_blocks(text.splitlines(), ctx)
+
+
+def parse_front_matter(text: str) -> tuple:
+    """解析文件头部由 --- 包裹的 `key: value` front matter。
+
+    Returns:
+        (meta 字典, 去掉 front matter 后的正文)。没有 front matter 时返回 ({}, 原文)。
+    """
+    lines = text.splitlines()
+    meta: dict = {}
+    if lines and lines[0].strip() == "---":
+        for i in range(1, len(lines)):
+            if lines[i].strip() == "---":
+                for raw in lines[1:i]:
+                    if ":" in raw:
+                        k, v = raw.split(":", 1)
+                        meta[k.strip()] = v.strip()
+                return meta, "\n".join(lines[i + 1:]).lstrip("\n")
+    return meta, text
+
+
+def _fm_tags(value: str) -> list:
+    """把 front matter 里的 `[a, b, c]` 解析成标签列表。"""
+    v = (value or "").strip()
+    if v.startswith("[") and v.endswith("]"):
+        v = v[1:-1]
+    return [x.strip() for x in v.split(",") if x.strip()]
+
+
+def load_reading() -> list:
+    """读取 src/content/reading/*.md，返回文章列表（按日期倒序）。
+
+    每篇文章形如 {"slug","title","module","date","summary","tags","html","toc"}。
+    新增文章只要往该目录丢一个带 front matter 的 .md 即可，无需改代码。
+    """
+    articles: list = []
+    if not READING_DIR.is_dir():
+        return articles
+    for path in sorted(READING_DIR.glob("*.md")):
+        meta, body = parse_front_matter(path.read_text(encoding="utf-8"))
+        toc: list = []
+        articles.append({
+            "slug": path.stem,
+            "title": meta.get("title") or path.stem,
+            "module": meta.get("module", "").strip(),
+            "date": meta.get("date", "").strip(),
+            "summary": meta.get("summary", "").strip(),
+            "tags": _fm_tags(meta.get("tags", "")),
+            "html": md_render(body, toc),
+            "toc": toc,
+        })
+    articles.sort(key=lambda a: a["date"], reverse=True)
+    return articles
 
 
 # ---------------------------------------------------------------- 数据
@@ -111,6 +348,7 @@ def sidebar(root: str, active: str, problems, mod_of) -> str:
              f'<a href="{root}index.html" class="{_on(active, "index")}">概览</a>',
              f'<a href="{root}modules.html" class="{_on(active, "modules")}">知识模块</a>',
              f'<a href="{root}problems.html" class="{_on(active, "problems")}">全部题目</a>',
+             f'<a href="{root}reading.html" class="{_on(active, "reading")}">扩展阅读</a>',
              '<h4>知识模块</h4>']
     for mid, m in MODULES.items():
         cls = "on" if active == f"mod:{mid}" else ""
@@ -140,6 +378,7 @@ def layout(*, root: str, title: str, active: str, body: str, toc: str = "",
         ("index", "概览", f"{root}index.html"),
         ("modules", "知识模块", f"{root}modules.html"),
         ("problems", "全部题目", f"{root}problems.html"),
+        ("reading", "扩展阅读", f"{root}reading.html"),
     ]
     navhtml = "".join(
         f'<a href="{u}" class="{_on(active, k)}">{t}</a>' for k, t, u in nav)
@@ -160,7 +399,7 @@ def layout(*, root: str, title: str, active: str, body: str, toc: str = "",
   <a class="brand" href="{root}index.html"><span class="dot">C</span>LeetCPU 中文站</a>
   <nav class="topnav">{navhtml}</nav>
   <div class="searchbox">
-    <input id="q" type="search" placeholder="搜索题目 / 模块…" autocomplete="off">
+    <input id="q" type="search" placeholder="搜索题目 / 模块 / 文章…" autocomplete="off">
     <div id="results"></div>
   </div>
   <button class="iconbtn" data-theme-toggle title="切换明暗主题">◐</button>
@@ -182,11 +421,44 @@ def layout(*, root: str, title: str, active: str, body: str, toc: str = "",
 
 
 # ---------------------------------------------------------------- 页面
-def page_index(root, problems, mod_of) -> str:
+def _mod_badge(root: str, module_id: str, link: bool = True) -> str:
+    """渲染所属模块徽章；module 为空或未知时返回空串（容错）。"""
+    m = MODULES.get(module_id or "")
+    if not m:
+        return ""
+    style = f' style="background:{m["color"]}"'
+    if not link:
+        return f'<span class="badge mod"{style}>{esc(m["zh"])}</span>'
+    return (f'<a class="badge mod"{style} href="{root}modules/{module_id}.html">'
+            f'{esc(m["zh"])}</a>')
+
+
+def _tag_html(tags: list) -> str:
+    return "".join(f'<span class="tag">{esc(t)}</span>' for t in tags)
+
+
+def _reading_cards(root: str, articles: list) -> str:
+    """渲染扩展阅读卡片列表（首页与扩展阅读页共用）。"""
+    if not articles:
+        return '<p class="sub">暂无扩展阅读文章。</p>'
+    cards = []
+    for a in articles:
+        tags = _tag_html(a["tags"])
+        meta = esc(a["date"]) + (f' · {tags}' if tags else "")
+        cards.append(
+            f'<a class="card" href="{root}reading/{a["slug"]}.html">'
+            f'{_mod_badge(root, a["module"], link=False)}'
+            f'<h3>{esc(a["title"])}</h3>'
+            f'<p>{esc(a["summary"])}</p>'
+            f'<p class="sub" style="margin-top:8px">{meta}</p></a>')
+    return f'<div class="grid g2">{"".join(cards)}</div>'
+
+
+def page_index(root, problems, mod_of, articles) -> str:
     stats = "".join(
         f'<div class="stat"><b>{v}</b><span>{t}</span></div>'
         for v, t in [("22", "道实战题目"), ("8", "个知识模块"),
-                     ("12", "项性能指标"), ("22", "份优化报告")])
+                     ("12", "项性能指标"), (str(len(articles)), "篇扩展阅读")])
     cards = "".join(
         f'<a class="card" href="{root}modules/{mid}.html">'
         f'<span class="badge mod" style="background:{m["color"]}">{esc(m["icon"])}</span> '
@@ -227,9 +499,14 @@ ChampSim / perf 环境中实测。想跑在线仿真请访问 <a href="https://w
 
 <h2 id="modules">知识模块</h2>
 <div class="grid g2">{cards}</div>
+
+<h2 id="reading">扩展阅读</h2>
+<p class="sub">比题目页更长、更完整的专题文章，讲透一个主题来龙去脉。</p>
+{_reading_cards(root, articles)}
 """
     toc = "".join(f'<a href="#{i}">{t}</a>' for i, t in
-                  [("how", "怎么用这个站"), ("overview", "题目总览"), ("modules", "知识模块")])
+                  [("how", "怎么用这个站"), ("overview", "题目总览"),
+                   ("modules", "知识模块"), ("reading", "扩展阅读")])
     return layout(root=root, title="概览", active="index", body=body, toc=toc,
                   problems=problems, mod_of=mod_of)
 
@@ -260,7 +537,23 @@ def page_modules(root, problems, mod_of) -> str:
                   problems=problems, mod_of=mod_of)
 
 
-def page_module(root, mid, problems, mod_of) -> str:
+def _module_reading(root: str, mid: str, articles: list) -> str:
+    """知识模块页底部的「扩展阅读」区块；无关联文章时返回空串。"""
+    subs = [a for a in articles if a["module"] == mid]
+    if not subs:
+        return ""
+    rows = "".join(
+        f'<tr><td><a href="{root}reading/{a["slug"]}.html">{esc(a["title"])}</a></td>'
+        f'<td class="sub">{esc(a["date"])}</td>'
+        f'<td>{esc(a["summary"])}</td></tr>' for a in subs)
+    return (f'<h2 id="reading">扩展阅读</h2>'
+            f'<p class="sub">与本模块相关的专题长文。</p>'
+            f'<table><thead><tr><th style="width:240px">文章</th>'
+            f'<th style="width:96px">日期</th><th>摘要</th></tr></thead>'
+            f'<tbody>{rows}</tbody></table>')
+
+
+def page_module(root, mid, problems, mod_of, articles) -> str:
     m = MODULES[mid]
     subs = [p for p in problems if mod_of[p["slug"]] == mid]
     secs = []
@@ -297,10 +590,13 @@ def page_module(root, mid, problems, mod_of) -> str:
 
 <h2 id="problems">配套题目</h2>
 {"<table><thead><tr><th>题目</th><th style='width:64px'>难度</th><th>一句话思路</th></tr></thead><tbody>" + rel + "</tbody></table>" if rel else "<p class='sub'>该模块暂无直接配套题目，可先阅读概念讲解。</p>"}
+
+{_module_reading(root, mid, articles)}
 """
     toc = (f'<a href="#concepts">概念讲解</a>'
            + "".join(f'<a href="#{a}">{esc(h)}</a>' for a, h in anchors)
-           + '<a href="#metrics">关键指标</a><a href="#problems">配套题目</a>')
+           + '<a href="#metrics">关键指标</a><a href="#problems">配套题目</a>'
+           + ('<a href="#reading">扩展阅读</a>' if any(a["module"] == mid for a in articles) else ""))
     return layout(root=root, title=m["zh"], active=f"mod:{mid}", body=body, toc=toc,
                   problems=problems, mod_of=mod_of, desc=m["tagline"])
 
@@ -417,21 +713,59 @@ def page_problem(root, p, prev_p, next_p, problems, mod_of) -> str:
                   problems=problems, mod_of=mod_of, desc=z["one_liner"])
 
 
+def page_reading(root, articles, problems, mod_of) -> str:
+    body = f"""
+<h1>扩展阅读</h1>
+<p class="lead">比题目页更长、更完整的专题文章：把一个主题的来龙去脉、算法演进与各家实现一次讲透。</p>
+<p class="sub">共 {len(articles)} 篇。</p>
+{_reading_cards(root, articles)}
+"""
+    return layout(root=root, title="扩展阅读", active="reading", body=body, toc="",
+                  problems=problems, mod_of=mod_of,
+                  desc="扩展阅读：分支预测、缓存层次等 CPU 微架构专题长文。")
+
+
+def page_article(root, art, problems, mod_of) -> str:
+    """文章页。标题由正文的 H1 提供，这里不再重复输出一个 H1。"""
+    m = MODULES.get(art["module"] or "")
+    tags = _tag_html(art["tags"])
+    toc = "".join(f'<a href="#{a}" class="lv{lv}">{esc(t)}</a>'
+                  for lv, t, a in art["toc"])
+    body = f"""
+<div class="meta">
+  <span class="badge">扩展阅读</span>
+  {_mod_badge(root, art["module"])}
+  <span class="sub">{esc(art["date"])}</span>
+</div>
+{art["html"]}
+{f'<p class="tags">{tags}</p>' if tags else ""}
+<div class="pager">
+  <a href="{root}reading.html"><span class="k">← 返回</span>扩展阅读</a>
+  {f'<a class="next" href="{root}modules/{art["module"]}.html"><span class="k">所属模块 →</span>{esc(m["zh"])}</a>' if m else "<span></span>"}
+</div>
+"""
+    return layout(root=root, title=art["title"], active=f"art:{art['slug']}",
+                  body=body, toc=toc, problems=problems, mod_of=mod_of,
+                  desc=art["summary"])
+
+
 # ---------------------------------------------------------------- 构建
 def build(out: Path) -> None:
     problems, by_slug, mod_of = load()
+    articles = load_reading()
     # 只清理本生成器的已知产物，绝不 rmtree 整个 out：
     # docs/ 处于 git 版本控制下，误删整个目录会有丢数据风险。
-    for name in ("modules", "problems", "assets"):
+    for name in ("modules", "problems", "reading", "assets"):
         d = out / name
         if d.exists():
             shutil.rmtree(d)
-    for name in ("index.html", "modules.html", "problems.html"):
+    for name in ("index.html", "modules.html", "problems.html", "reading.html"):
         f = out / name
         if f.exists():
             f.unlink()
     (out / "modules").mkdir(parents=True)
     (out / "problems").mkdir(parents=True)
+    (out / "reading").mkdir(parents=True)
     (out / "assets").mkdir(parents=True)
     # 禁用 Jekyll：否则 Pages 会忽略下划线开头的文件并拖慢构建
     (out / ".nojekyll").write_text("", encoding="utf-8")
@@ -449,29 +783,40 @@ def build(out: Path) -> None:
         index.append({"kind": "题目", "mod": MODULES[mod_of[p["slug"]]]["zh"],
                       "zh": z["zh"], "title": p["title"], "bottleneck": z["bottleneck"],
                       "sum": z["report"]["summary"], "url": f"problems/{p['slug']}.html"})
+    for a in articles:
+        m = MODULES.get(a["module"] or "")
+        index.append({"kind": "文章", "mod": m["zh"] if m else "", "zh": a["title"],
+                      "title": a["title"], "bottleneck": "", "sum": a["summary"],
+                      "url": f"reading/{a['slug']}.html"})
     (out / "assets" / "search.json").write_text(
         json.dumps(index, ensure_ascii=False, indent=1), encoding="utf-8")
     (out / "assets" / "search.js").write_text(
         "window.__INDEX__=" + json.dumps(index, ensure_ascii=False) + ";", encoding="utf-8")
 
     pages = {
-        out / "index.html": page_index("", problems, mod_of),
+        out / "index.html": page_index("", problems, mod_of, articles),
         out / "modules.html": page_modules("", problems, mod_of),
         out / "problems.html": page_problems("", problems, mod_of),
+        out / "reading.html": page_reading("", articles, problems, mod_of),
     }
     for mid in MODULES:
-        pages[out / "modules" / f"{mid}.html"] = page_module("../", mid, problems, mod_of)
+        pages[out / "modules" / f"{mid}.html"] = page_module(
+            "../", mid, problems, mod_of, articles)
     for i, p in enumerate(problems):
         prev_p = problems[i - 1] if i > 0 else None
         next_p = problems[i + 1] if i + 1 < len(problems) else None
         pages[out / "problems" / f"{p['slug']}.html"] = page_problem(
             "../", p, prev_p, next_p, problems, mod_of)
+    for a in articles:
+        pages[out / "reading" / f"{a['slug']}.html"] = page_article(
+            "../", a, problems, mod_of)
 
     for path, html_text in pages.items():
         path.write_text(html_text, encoding="utf-8")
 
     print(f"生成完成：{out}")
-    print(f"  页面 {len(pages)} 个：首页 1 + 模块总览 1 + 题目总览 1 + 模块 {len(MODULES)} + 题目 {len(problems)}")
+    print(f"  页面 {len(pages)} 个：首页 1 + 模块总览 1 + 题目总览 1 + 扩展阅读 1 "
+          f"+ 模块 {len(MODULES)} + 题目 {len(problems)} + 文章 {len(articles)}")
     print(f"  资源：assets/style.css, assets/app.js, assets/search.json, assets/search.js")
     return pages
 

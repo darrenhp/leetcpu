@@ -268,5 +268,14 @@
   "bottleneck": "嵌套分支的控制流开销",
   "sum": "预计算 `lut[256]`，把 5 层 if/else 压缩成热循环中的**一次字节查表** `total += lut[scores[i]]`。建表成本 O(101)，被 2000 万次查表完全摊薄。",
   "url": "problems/lookup-table-grade-bands.html"
+ },
+ {
+  "kind": "文章",
+  "mod": "分支预测",
+  "zh": "分支预测完全指南：从一次数据重排优化说起",
+  "title": "分支预测完全指南：从一次数据重排优化说起",
+  "bottleneck": "",
+  "sum": "一条线索串起四个问题：一个真实优化案例 → 预测器为什么只能是硬件 → 预测算法如何演进 → ARM 与 x86 各家的具体实现。",
+  "url": "reading/branch-prediction-guide.html"
  }
 ]

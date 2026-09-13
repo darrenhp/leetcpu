@@ -227,6 +227,33 @@ pre code { background: none; border: 0; padding: 0; font-size: inherit; }
 .k-pre { color: #8250df; } [data-theme="dark"] .k-pre { color: #d2a8ff; }
 .k-fn { color: #6639ba; } [data-theme="dark"] .k-fn { color: #d2a8ff; }
 
+/* ---------------- 文章（Markdown 渲染） ---------------- */
+blockquote {
+  border-left: 3px solid var(--border-strong); padding: 2px 0 2px 14px;
+  margin: 0 0 16px; color: var(--text-soft); font-size: 14.4px;
+}
+blockquote p:last-child { margin-bottom: 0; }
+
+/* 来源标注 [citation:N] —— 低调的上标 */
+sup.cite { font-size: 10.5px; color: var(--text-dim); font-weight: 500; padding-left: 1px; }
+
+.tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; }
+.tag {
+  display: inline-block; border: 1px solid var(--border); border-radius: 999px;
+  padding: 1px 9px; font-size: 12.2px; color: var(--text-soft); background: var(--bg-soft);
+}
+
+/* TOC 里 H3 缩进一级，体现层级 */
+.toc a.lv3 { padding-left: 22px; font-size: 12.6px; color: var(--text-dim); }
+
+/* 搜索结果的类型徽章 */
+#results .kind {
+  display: inline-block; border-radius: 4px; padding: 0 5px; margin-right: 5px;
+  font-size: 11px; background: var(--bg-soft); color: var(--text-soft);
+  border: 1px solid var(--border); vertical-align: 1px;
+}
+#results .kind[data-kind="文章"] { color: var(--accent); border-color: var(--accent); }
+
 /* ---------------- misc ---------------- */
 .pager { display: flex; justify-content: space-between; gap: 12px; margin-top: 44px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 14px; }
 .pager a { max-width: 46%; }

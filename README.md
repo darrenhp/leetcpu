@@ -31,7 +31,8 @@ leetcpu/
 │   ├── content/
 │   │   ├── modules_zh.py       8 个知识模块的中文讲解 + 模块↔题目映射
 │   │   ├── problems_zh_a.py    第 1–11 题的中文题面与优化报告
-│   │   └── problems_zh_b.py    第 12–22 题的中文题面与优化报告
+│   │   ├── problems_zh_b.py    第 12–22 题的中文题面与优化报告
+│   │   └── reading/            扩展阅读：Markdown 源文件（front matter + 正文）
 │   ├── data/                   源数据快照（仓库自包含，克隆即可重建）
 │   │   ├── problems.json
 │   │   └── dataset_curriculum.json
@@ -44,6 +45,8 @@ leetcpu/
 │   ├── modules/<id>.html       8 个模块页
 │   ├── problems.html           22 题列表（按模块筛选）
 │   ├── problems/<slug>.html    22 个题目页
+│   ├── reading.html            扩展阅读首页
+│   ├── reading/<slug>.html     文章页（由 Markdown 渲染，右侧 TOC 自动生成）
 │   └── assets/                 style.css / app.js / search.json / search.js
 └── tools/
     └── leetcpu-scraper/        上游抓取器源码 + 结构化数据产物
@@ -59,6 +62,23 @@ leetcpu/
             ├── SUMMARY.md             抓取结果概览
             └── page_text.txt
 ```
+
+## 扩展阅读
+
+比题目页更长、更完整的专题文章，源文件是 `src/content/reading/*.md`（带 front matter 的 Markdown，
+正文原样保留，由 `src/build.py` 内的纯标准库渲染器转成 HTML）。新增文章只需往该目录放一个 `.md`：
+
+```
+---
+title: 文章标题
+module: branch        # 可选：关联的模块 id，留空则不挂模块
+date: 2026-09-14
+summary: 一句话摘要
+tags: [标签1, 标签2]
+---
+```
+
+front matter 里填了 `module` 的文章会自动出现在对应知识模块页底部；反之模块页不显示该区块。
 
 ## 题目页结构
 

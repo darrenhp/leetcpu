@@ -11,9 +11,9 @@
 <body data-root="../">
 <header class="topbar">
   <a class="brand" href="../index.html"><span class="dot">C</span>LeetCPU 中文站</a>
-  <nav class="topnav"><a href="../index.html" class="">概览</a><a href="../modules.html" class="">知识模块</a><a href="../problems.html" class="">全部题目</a></nav>
+  <nav class="topnav"><a href="../index.html" class="">概览</a><a href="../modules.html" class="">知识模块</a><a href="../problems.html" class="">全部题目</a><a href="../reading.html" class="">扩展阅读</a></nav>
   <div class="searchbox">
-    <input id="q" type="search" placeholder="搜索题目 / 模块…" autocomplete="off">
+    <input id="q" type="search" placeholder="搜索题目 / 模块 / 文章…" autocomplete="off">
     <div id="results"></div>
   </div>
   <button class="iconbtn" data-theme-toggle title="切换明暗主题">◐</button>
@@ -23,6 +23,7 @@
 <a href="../index.html" class="">概览</a>
 <a href="../modules.html" class="">知识模块</a>
 <a href="../problems.html" class="">全部题目</a>
+<a href="../reading.html" class="">扩展阅读</a>
 <h4>知识模块</h4>
 <a href="../modules/branch.html" class="">分支预测</a>
 <a href="../modules/cache.html" class="">缓存层次</a>
@@ -80,6 +81,8 @@
 
 <h2 id="problems">配套题目</h2>
 <table><thead><tr><th>题目</th><th style='width:64px'>难度</th><th>一句话思路</th></tr></thead><tbody><tr><td><a href="../problems/interleaved-pointer-chasing.html">04 · 指针追逐：恢复内存级并行</a></td><td><span class="badge medium">中等</span></td><td>一条链表是串行的 N 次失效；8 条链表交错遍历，就变成 8 路并行失效。</td></tr><tr><td><a href="../problems/strided-sum-prefetch.html">06 · 跨步求和：用预取隐藏延迟</a></td><td><span class="badge medium">中等</span></td><td>每次访问都是一条新缓存行 —— 那就提前把未来 32 行取进来。</td></tr><tr><td><a href="../problems/irregular-gather-prefetch.html">12 · 不规则聚集：为随机访问提前预取</a></td><td><span class="badge medium">中等</span></td><td>索引流是顺序的、数据流是随机的 —— 那就用前者去预取后者。</td></tr></tbody></table>
+
+
 </main>
   <aside class="toc"><h4>本页目录</h4><a href="#concepts">概念讲解</a><a href="#c1">延迟 vs 带宽</a><a href="#c2">硬件预取与软件预取</a><a href="#c3">行缓冲与 DRAM 时序</a><a href="#metrics">关键指标</a><a href="#problems">配套题目</a></aside>
 </div>

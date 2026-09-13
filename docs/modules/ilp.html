@@ -11,9 +11,9 @@
 <body data-root="../">
 <header class="topbar">
   <a class="brand" href="../index.html"><span class="dot">C</span>LeetCPU 中文站</a>
-  <nav class="topnav"><a href="../index.html" class="">概览</a><a href="../modules.html" class="">知识模块</a><a href="../problems.html" class="">全部题目</a></nav>
+  <nav class="topnav"><a href="../index.html" class="">概览</a><a href="../modules.html" class="">知识模块</a><a href="../problems.html" class="">全部题目</a><a href="../reading.html" class="">扩展阅读</a></nav>
   <div class="searchbox">
-    <input id="q" type="search" placeholder="搜索题目 / 模块…" autocomplete="off">
+    <input id="q" type="search" placeholder="搜索题目 / 模块 / 文章…" autocomplete="off">
     <div id="results"></div>
   </div>
   <button class="iconbtn" data-theme-toggle title="切换明暗主题">◐</button>
@@ -23,6 +23,7 @@
 <a href="../index.html" class="">概览</a>
 <a href="../modules.html" class="">知识模块</a>
 <a href="../problems.html" class="">全部题目</a>
+<a href="../reading.html" class="">扩展阅读</a>
 <h4>知识模块</h4>
 <a href="../modules/branch.html" class="">分支预测</a>
 <a href="../modules/cache.html" class="">缓存层次</a>
@@ -80,6 +81,8 @@
 
 <h2 id="problems">配套题目</h2>
 <table><thead><tr><th>题目</th><th style='width:64px'>难度</th><th>一句话思路</th></tr></thead><tbody><tr><td><a href="../problems/reduction-tree-ilp.html">03 · 规约树：打断依赖链</a></td><td><span class="badge medium">中等</span></td><td>单累加器是一条长度为 N 的依赖链 —— 用 4 个累加器把它拆成 4 条。</td></tr><tr><td><a href="../problems/bitset-popcount-throughput.html">07 · 位图统计：用 popcount 硬件替代逐位扫描</a></td><td><span class="badge easy">简单</span></td><td>64 次移位与掩码，被一条 popcnt 指令取代。</td></tr><tr><td><a href="../problems/histogram-dependency-chains.html">13 · 直方图：打断写依赖链</a></td><td><span class="badge medium">中等</span></td><td>相邻元素撞进同一个桶时会串行 —— 用 4 份部分直方图隔开它们。</td></tr><tr><td><a href="../problems/streaming-square-sum.html">16 · 流式平方和：多累加器提升 ILP</a></td><td><span class="badge easy">简单</span></td><td>一个累加器锁死在每周期一次加法 —— 用 4 个把它拆开。</td></tr><tr><td><a href="../problems/saxpy-auto-vectorize.html">18 · SAXPY：解锁自动向量化</a></td><td><span class="badge easy">简单</span></td><td>把循环写成规整形式，让编译器放心生成 SIMD。</td></tr><tr><td><a href="../problems/dot-product-eight-accumulators.html">21 · 点积：八个累加器</a></td><td><span class="badge easy">简单</span></td><td>一条长为 N 的浮点依赖链 → 8 条长为 N/8 的链。</td></tr></tbody></table>
+
+
 </main>
   <aside class="toc"><h4>本页目录</h4><a href="#concepts">概念讲解</a><a href="#c1">乱序执行</a><a href="#c2">依赖链</a><a href="#c3">如何提升 IPC</a><a href="#metrics">关键指标</a><a href="#problems">配套题目</a></aside>
 </div>

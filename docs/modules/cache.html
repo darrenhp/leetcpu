@@ -11,9 +11,9 @@
 <body data-root="../">
 <header class="topbar">
   <a class="brand" href="../index.html"><span class="dot">C</span>LeetCPU 中文站</a>
-  <nav class="topnav"><a href="../index.html" class="">概览</a><a href="../modules.html" class="">知识模块</a><a href="../problems.html" class="">全部题目</a></nav>
+  <nav class="topnav"><a href="../index.html" class="">概览</a><a href="../modules.html" class="">知识模块</a><a href="../problems.html" class="">全部题目</a><a href="../reading.html" class="">扩展阅读</a></nav>
   <div class="searchbox">
-    <input id="q" type="search" placeholder="搜索题目 / 模块…" autocomplete="off">
+    <input id="q" type="search" placeholder="搜索题目 / 模块 / 文章…" autocomplete="off">
     <div id="results"></div>
   </div>
   <button class="iconbtn" data-theme-toggle title="切换明暗主题">◐</button>
@@ -23,6 +23,7 @@
 <a href="../index.html" class="">概览</a>
 <a href="../modules.html" class="">知识模块</a>
 <a href="../problems.html" class="">全部题目</a>
+<a href="../reading.html" class="">扩展阅读</a>
 <h4>知识模块</h4>
 <a href="../modules/branch.html" class="">分支预测</a>
 <a href="../modules/cache.html" class="on">缓存层次</a>
@@ -80,6 +81,8 @@
 
 <h2 id="problems">配套题目</h2>
 <table><thead><tr><th>题目</th><th style='width:64px'>难度</th><th>一句话思路</th></tr></thead><tbody><tr><td><a href="../problems/matrix-multiply-tiling.html">02 · 矩阵乘法：分块与转置</a></td><td><span class="badge easy">简单</span></td><td>转置 B 消除列访问，再用分块把工作集压进缓存。</td></tr><tr><td><a href="../problems/particle-struct-repacking.html">08 · 粒子结构体：AoS 转 SoA</a></td><td><span class="badge medium">中等</span></td><td>把结构体数组拆成并列的字段数组，为展开与向量化铺路。</td></tr><tr><td><a href="../problems/image-blur-tiling.html">09 · 图像模糊：让工作集留在缓存里</a></td><td><span class="badge medium">中等</span></td><td>水平 3-tap 卷积 —— 收益主要来自指针外提与展开。</td></tr><tr><td><a href="../problems/ece-jacobi-stencil-lab.html">11 · Jacobi 五点 stencil：二维分块</a></td><td><span class="badge medium">中等</span></td><td>1024×1024 网格 = 4MB —— 按 32 行分块，让三行数据留在 L1。</td></tr><tr><td><a href="../problems/3d-loop-interchange.html">14 · 三维数组：修正循环顺序</a></td><td><span class="badge easy">简单</span></td><td>把最快变化的一维放到最内层 —— 步長从 16KB 降到 4 字节。</td></tr><tr><td><a href="../problems/binary-search-eytzinger.html">15 · 二分查找：Eytzinger 布局 + 预取</a></td><td><span class="badge hard">困难</span></td><td>把 O(log N) 次串行失效，变成按层批发的并行失效。</td></tr><tr><td><a href="../problems/row-major-cache-locality.html">17 · 二维网格求和：修正列优先遍历</a></td><td><span class="badge medium">中等</span></td><td>步长 8KB 的访问模式 —— 改成行优先，再加 64×64 分块。</td></tr></tbody></table>
+
+
 </main>
   <aside class="toc"><h4>本页目录</h4><a href="#concepts">概念讲解</a><a href="#c1">层次结构</a><a href="#c2">空间局部性与时间局部性</a><a href="#c3">如何减少缓存失效</a><a href="#metrics">关键指标</a><a href="#problems">配套题目</a></aside>
 </div>
