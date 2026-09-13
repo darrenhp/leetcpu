@@ -277,5 +277,14 @@
   "bottleneck": "",
   "sum": "一条线索串起四个问题：一个真实优化案例 → 预测器为什么只能是硬件 → 预测算法如何演进 → ARM 与 x86 各家的具体实现。",
   "url": "reading/branch-prediction-guide.html"
+ },
+ {
+  "kind": "文章",
+  "mod": "分支预测",
+  "zh": "编译器如何自动优化分支预测",
+  "title": "编译器如何自动优化分支预测",
+  "bottleneck": "",
+  "sum": "从代码布局、cmov 分支消除到掩码向量化，逐层拆开编译器在分支预测上能自动做到哪一步，以及它为什么会在向量化与语义重写处止步。",
+  "url": "reading/compiler-branch-optimization.html"
  }
 ]

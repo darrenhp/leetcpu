@@ -229,7 +229,17 @@ def _md_blocks(lines: list, ctx: dict) -> str:
                 if pat.match(ls):
                     items.append(pat.sub("", ls, count=1))
                     i += 1
-                elif ls and items and not _is_block_start(ls):
+                elif not ls:
+                    # 松散列表：项之间夹着空行时，若空行后仍是同类列表项则继续合并，
+                    # 否则拆成多段 <ol>/<ul> 会让编号从 1 重新开始。
+                    j = i
+                    while j < n and not lines[j].strip():
+                        j += 1
+                    if j < n and pat.match(lines[j].strip()):
+                        i = j
+                    else:
+                        break
+                elif items and not _is_block_start(ls):
                     items[-1] += " " + ls                  # 续行并入上一项
                     i += 1
                 else:
@@ -296,10 +306,21 @@ def _fm_tags(value: str) -> list:
     return [x.strip() for x in v.split(",") if x.strip()]
 
 
-def load_reading() -> list:
-    """读取 src/content/reading/*.md，返回文章列表（按日期倒序）。
+def _fm_order(value: str) -> "int | None":
+    """front matter 里的 order 字段；缺失或非法时返回 None（走 date 兜底）。"""
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
 
-    每篇文章形如 {"slug","title","module","date","summary","tags","html","toc"}。
+
+def load_reading() -> list:
+    """读取 src/content/reading/*.md，返回排好序的文章列表。
+
+    排序规则：有 order 的按 order 升序在前；无 order 的排在其后、按 date 降序；
+    同分时再用 slug 兜底，保证顺序与文件系统遍历顺序无关、完全确定。
+
+    每篇文章形如 {"slug","title","module","date","order","summary","tags","html","toc"}。
     新增文章只要往该目录丢一个带 front matter 的 .md 即可，无需改代码。
     """
     articles: list = []
@@ -313,12 +334,17 @@ def load_reading() -> list:
             "title": meta.get("title") or path.stem,
             "module": meta.get("module", "").strip(),
             "date": meta.get("date", "").strip(),
+            "order": _fm_order(meta.get("order")),
             "summary": meta.get("summary", "").strip(),
             "tags": _fm_tags(meta.get("tags", "")),
             "html": md_render(body, toc),
             "toc": toc,
         })
+    # 稳定排序：从最次要的键开始排，最后按 (有无 order, order) 排
+    articles.sort(key=lambda a: a["slug"])
     articles.sort(key=lambda a: a["date"], reverse=True)
+    articles.sort(key=lambda a: (a["order"] is None,
+                                 a["order"] if a["order"] is not None else 0))
     return articles
 
 
