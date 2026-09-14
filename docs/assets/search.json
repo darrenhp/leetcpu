@@ -286,5 +286,68 @@
   "bottleneck": "",
   "sum": "从代码布局、cmov 分支消除到掩码向量化，逐层拆开编译器在分支预测上能自动做到哪一步，以及它为什么会在向量化与语义重写处止步。",
   "url": "reading/compiler-branch-optimization.html"
+ },
+ {
+  "kind": "文章",
+  "mod": "缓存层次",
+  "zh": "缓存层次完全指南：从一次矩阵乘法分块说起",
+  "title": "缓存层次完全指南：从一次矩阵乘法分块说起",
+  "bottleneck": "",
+  "sum": "从 N=1024 双精度矩阵乘法的工作集推导出发，算出朴素 ijk 为何有 188 MPKI、分块后算术强度如何跨过机器平衡点，再展开组相联位划分、VIPT 别名、RRIP、MESI/MOESI 与四家当代处理器的实测参数。",
+  "url": "reading/cache-hierarchy-complete-guide.html"
+ },
+ {
+  "kind": "文章",
+  "mod": "ILP 与流水线",
+  "zh": "ILP 与流水线完全指南：从八累加器点积说起",
+  "title": "ILP 与流水线完全指南：从八累加器点积说起",
+  "bottleneck": "",
+  "sum": "把一个累加器拆成八个，理论上是 8 倍加速，实测往往只有 2 到 3 倍。本文从这道点积题出发，推导流水线宽度、端口数、物理寄存器如何一层层压住指令级并行，再横向对比 Intel、AMD、ARM、Apple 当代核心的真实参数。",
+  "url": "reading/ilp-and-pipeline-complete-guide.html"
+ },
+ {
+  "kind": "文章",
+  "mod": "内存层次与延迟隐藏",
+  "zh": "内存层次与延迟隐藏：从指针追逐说起",
+  "title": "内存层次与延迟隐藏：从指针追逐说起",
+  "bottleneck": "",
+  "sum": "为什么单链表遍历一定吃不满内存带宽？本文用一个可推导的指针追逐实验给出答案：Little's Law 算出需要的并发访存数，MSHR 决定硬件能给多少，内存调度与预取只能在这个上限内做文章。",
+  "url": "reading/memory-hierarchy-latency-hiding.html"
+ },
+ {
+  "kind": "文章",
+  "mod": "ROB 与乱序执行",
+  "zh": "ROB 与乱序执行完全指南：一次瓶颈会诊的完整拆解",
+  "title": "ROB 与乱序执行完全指南：一次瓶颈会诊的完整拆解",
+  "bottleneck": "",
+  "sum": "用一道\"三重瓶颈\"题目建立 ROB 占用率 × IPC × 分支误预测时占用 的三指标诊断框架；讲清 ROB、调度队列、物理寄存器堆与 Load/Store Queue 的分工；再从 Tomasulo 与 Smith-Pleszkun 走到 Lion Cove、Zen 5、Neoverse V2 与 Apple M 系列的真实参数对比。",
+  "url": "reading/rob-out-of-order-complete-guide.html"
+ },
+ {
+  "kind": "文章",
+  "mod": "前端与指令缓存",
+  "zh": "前端与指令缓存：为什么过度展开反而更慢",
+  "title": "前端与指令缓存：为什么过度展开反而更慢",
+  "bottleneck": "",
+  "sum": "循环展开能抬高 ILP，但展开倍数越过某个拐点后，循环体会依次撑爆 loop buffer、uop cache 与 L1 指令缓存，前端从\"透明\"变成新瓶颈。本文设计一个可复现的展开倍数实验，给出三条硬阈值的手算方法，并横向对比 Intel、AMD、ARM、Apple 四家 2024 年前后的前端参数。",
+  "url": "reading/frontend-and-instruction-cache.html"
+ },
+ {
+  "kind": "文章",
+  "mod": "SIMD 与向量化",
+  "zh": "SIMD 与向量化完全指南：从 SAXPY 到 AVX10 与矩阵扩展",
+  "title": "SIMD 与向量化完全指南：从 SAXPY 到 AVX10 与矩阵扩展",
+  "bottleneck": "",
+  "sum": "同一份 SAXPY 循环，把向量宽度从 128 位加到 512 位，理论算力涨 4 倍，实测耗时却可能一模一样。本文先用 roofline 把这个反直觉变成可手算的判据，再沿 x86 与 ARM 两条主线梳理从 MMX 到 AVX10、AMX、SME 的取舍，最后对比四家的真实实现宽度。",
+  "url": "reading/simd-vectorization-complete-guide.html"
+ },
+ {
+  "kind": "文章",
+  "mod": "TLB 与地址转换",
+  "zh": "TLB 与地址转换：从一次聚集重排说起",
+  "title": "TLB 与地址转换：从一次聚集重排说起",
+  "bottleneck": "",
+  "sum": "把随机聚集访问按页重排后变快，提升的往往不只是 cache 命中率。本文从可推导的数字出发，讲清页表遍历、多级 TLB、大页与虚拟化两层转换的真实代价，并对比 Intel、AMD、ARM、Apple 四家当前处理器。",
+  "url": "reading/tlb-address-translation-guide.html"
  }
 ]

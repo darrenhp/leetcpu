@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ILP 与流水线完全指南：从八累加器点积说起 · LeetCPU 中文站</title>
+<meta name="description" content="把一个累加器拆成八个，理论上是 8 倍加速，实测往往只有 2 到 3 倍。本文从这道点积题出发，推导流水线宽度、端口数、物理寄存器如何一层层压住指令级并行，再横向对比 Intel、AMD、ARM、Apple 当代核心的真实参数。">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232f6feb'/><text x='16' y='23' font-size='19' font-family='monospace' fill='white' text-anchor='middle'>C</text></svg>">
+</head>
+<body data-root="../">
+<header class="topbar">
+  <a class="brand" href="../index.html"><span class="dot">C</span>LeetCPU 中文站</a>
+  <nav class="topnav"><a href="../index.html" class="">概览</a><a href="../modules.html" class="">知识模块</a><a href="../problems.html" class="">全部题目</a><a href="../reading.html" class="on">扩展阅读</a></nav>
+  <div class="searchbox">
+    <input id="q" type="search" placeholder="搜索题目 / 模块 / 文章…" autocomplete="off">
+    <div id="results"></div>
+  </div>
+  <button class="iconbtn" data-theme-toggle title="切换明暗主题">◐</button>
+</header>
+<div class="wrap">
+  <nav class="sidebar"><details class="side-group" name="side-tab">
+  <summary>
+    <span class="side-summary-left">
+      <span class="side-arrow">▶</span>
+      <a href="../index.html" class="side-title ">概览</a>
+    </span>
+  </summary>
+  <div class="side-body">
+    <a href="../index.html" class="">概览首页</a>
+    <a href="../index.html#how">怎么用这个站</a>
+    <a href="../index.html#overview">题目总览</a>
+    <a href="../index.html#modules">知识模块</a>
+    <a href="../index.html#reading">扩展阅读</a>
+  </div>
+</details>
+<details class="side-group" name="side-tab">
+  <summary>
+    <span class="side-summary-left">
+      <span class="side-arrow">▶</span>
+      <a href="../modules.html" class="side-title ">知识模块</a>
+    </span>
+    <span class="side-count">8</span>
+  </summary>
+  <div class="side-body">
+    <a href="../modules.html" class="">模块总览</a>
+    <a href="../modules/branch.html" class="">分支预测</a>
+    <a href="../modules/cache.html" class="">缓存层次</a>
+    <a href="../modules/ilp.html" class="">ILP 与流水线</a>
+    <a href="../modules/memory.html" class="">内存层次与延迟隐藏</a>
+    <a href="../modules/rob.html" class="">ROB 与乱序执行</a>
+    <a href="../modules/frontend.html" class="">前端与指令缓存</a>
+    <a href="../modules/tlb.html" class="">TLB 与地址转换</a>
+    <a href="../modules/simd.html" class="">SIMD 与向量化</a>
+  </div>
+</details>
+<details class="side-group" name="side-tab">
+  <summary>
+    <span class="side-summary-left">
+      <span class="side-arrow">▶</span>
+      <a href="../problems.html" class="side-title ">全部题目</a>
+    </span>
+    <span class="side-count">22</span>
+  </summary>
+  <div class="side-body">
+    <a href="../problems.html" class="">题目总览</a>
+    <div class="side-subhead">分支预测</div>
+    <a href="../problems/stable-partition-branches.html" class=""><span class="num">01</span>稳定划分：让分支变得可预测</a>
+    <a href="../problems/branchless-score-window.html" class=""><span class="num">10</span>区间计分：用无符号技巧消除分支</a>
+    <a href="../problems/masked-saxpy-branchless.html" class=""><span class="num">20</span>掩码 SAXPY：去分支换取吞吐</a>
+    <a href="../problems/lookup-table-grade-bands.html" class=""><span class="num">22</span>等级分档：用查表替代嵌套分支</a>
+    <div class="side-subhead">缓存层次</div>
+    <a href="../problems/matrix-multiply-tiling.html" class=""><span class="num">02</span>矩阵乘法：分块与转置</a>
+    <a href="../problems/particle-struct-repacking.html" class=""><span class="num">08</span>粒子结构体：AoS 转 SoA</a>
+    <a href="../problems/image-blur-tiling.html" class=""><span class="num">09</span>图像模糊：让工作集留在缓存里</a>
+    <a href="../problems/ece-jacobi-stencil-lab.html" class=""><span class="num">11</span>Jacobi 五点 stencil：二维分块</a>
+    <a href="../problems/3d-loop-interchange.html" class=""><span class="num">14</span>三维数组：修正循环顺序</a>
+    <a href="../problems/binary-search-eytzinger.html" class=""><span class="num">15</span>二分查找：Eytzinger 布局 + 预取</a>
+    <a href="../problems/row-major-cache-locality.html" class=""><span class="num">17</span>二维网格求和：修正列优先遍历</a>
+    <div class="side-subhead">ILP 与流水线</div>
+    <a href="../problems/reduction-tree-ilp.html" class=""><span class="num">03</span>规约树：打断依赖链</a>
+    <a href="../problems/bitset-popcount-throughput.html" class=""><span class="num">07</span>位图统计：用 popcount 硬件替代逐位扫描</a>
+    <a href="../problems/histogram-dependency-chains.html" class=""><span class="num">13</span>直方图：打断写依赖链</a>
+    <a href="../problems/streaming-square-sum.html" class=""><span class="num">16</span>流式平方和：多累加器提升 ILP</a>
+    <a href="../problems/saxpy-auto-vectorize.html" class=""><span class="num">18</span>SAXPY：解锁自动向量化</a>
+    <a href="../problems/dot-product-eight-accumulators.html" class=""><span class="num">21</span>点积：八个累加器</a>
+    <div class="side-subhead">内存层次与延迟隐藏</div>
+    <a href="../problems/interleaved-pointer-chasing.html" class=""><span class="num">04</span>指针追逐：恢复内存级并行</a>
+    <a href="../problems/strided-sum-prefetch.html" class=""><span class="num">06</span>跨步求和：用预取隐藏延迟</a>
+    <a href="../problems/irregular-gather-prefetch.html" class=""><span class="num">12</span>不规则聚集：为随机访问提前预取</a>
+    <div class="side-subhead">ROB 与乱序执行</div>
+    <a href="../problems/bottleneck-triage.html" class=""><span class="num">05</span>瓶颈会诊：一次修好三个问题</a>
+    <div class="side-subhead">TLB 与地址转换</div>
+    <a href="../problems/gather-reorder-cache-clustering.html" class=""><span class="num">19</span>聚集重排：按页聚簇访问</a>
+  </div>
+</details>
+<details class="side-group" name="side-tab" open>
+  <summary>
+    <span class="side-summary-left">
+      <span class="side-arrow">▶</span>
+      <a href="../reading.html" class="side-title on">扩展阅读</a>
+    </span>
+    <span class="side-count">9</span>
+  </summary>
+  <div class="side-body">
+    <a href="../reading.html" class="">文章总览</a>
+    <div class="side-subhead">分支预测</div>
+    <a href="../reading/branch-prediction-guide.html" class="" title="分支预测完全指南：从一次数据重排优化说起">分支预测完全指南：从一次数据重排优化说起</a>
+    <a href="../reading/compiler-branch-optimization.html" class="" title="编译器如何自动优化分支预测">编译器如何自动优化分支预测</a>
+    <div class="side-subhead">缓存层次</div>
+    <a href="../reading/cache-hierarchy-complete-guide.html" class="" title="缓存层次完全指南：从一次矩阵乘法分块说起">缓存层次完全指南：从一次矩阵乘法分块说起</a>
+    <div class="side-subhead">ILP 与流水线</div>
+    <a href="../reading/ilp-and-pipeline-complete-guide.html" class="on" title="ILP 与流水线完全指南：从八累加器点积说起">ILP 与流水线完全指南：从八累加器点积说起</a>
+    <div class="side-subhead">内存层次与延迟隐藏</div>
+    <a href="../reading/memory-hierarchy-latency-hiding.html" class="" title="内存层次与延迟隐藏：从指针追逐说起">内存层次与延迟隐藏：从指针追逐说起</a>
+    <div class="side-subhead">ROB 与乱序执行</div>
+    <a href="../reading/rob-out-of-order-complete-guide.html" class="" title="ROB 与乱序执行完全指南：一次瓶颈会诊的完整拆解">ROB 与乱序执行完全指南：一次瓶颈会诊的完整拆解</a>
+    <div class="side-subhead">前端与指令缓存</div>
+    <a href="../reading/frontend-and-instruction-cache.html" class="" title="前端与指令缓存：为什么过度展开反而更慢">前端与指令缓存：为什么过度展开反而更慢</a>
+    <div class="side-subhead">TLB 与地址转换</div>
+    <a href="../reading/tlb-address-translation-guide.html" class="" title="TLB 与地址转换：从一次聚集重排说起">TLB 与地址转换：从一次聚集重排说起</a>
+    <div class="side-subhead">SIMD 与向量化</div>
+    <a href="../reading/simd-vectorization-complete-guide.html" class="" title="SIMD 与向量化完全指南：从 SAXPY 到 AVX10 与矩阵扩展">SIMD 与向量化完全指南：从 SAXPY 到 AVX10 与矩阵扩展</a>
+  </div>
+</details></nav>
+  <main>
+<div class="meta">
+  <span class="badge">扩展阅读</span>
+  <a class="badge mod" style="background:#00b8a3" href="../modules/ilp.html">ILP 与流水线</a>
+  <span class="sub">2026-09-14</span>
+</div>
+<h1 id="ilp">ILP 与流水线完全指南：从八累加器点积说起</h1>
+<blockquote><p>依赖链决定了 IPC 的下界，端口和宽度决定了上界。本文推导这三条答案在同一个算法上如何互相打架，并把流水线这半个主题补全：IF/ID/EX/MEM/WB 之后，现代核心到底加了几级、每级在干什么。</p></blockquote>
+<hr>
+<h2 id="sec-2">一、现象：八个累加器为什么跑不满八倍</h2>
+<h3 id="1-1">1.1 单累加器：一条依赖链就锁死了下界</h3>
+<p>以本站 <a href="../problems/dot-product-eight-accumulators.html">点积 — 八累加器</a> 为例，最朴素的写法是：</p>
+<div class="codeblock">
+  <div class="codebar"><span class="label">c</span><button class="copybtn">复制</button></div>
+  <pre data-code="double dot(const double *a, const double *b, int n) {
+    double s = 0.0;
+    for (int i = 0; i &lt; n; i++)
+        s += a[i] * b[i];       // ← s → s → s，一条串行链
+    return s;
+}"></pre>
+</div>
+<p>关键点在于：乘法的结果不在这条链上（<code>a[i]*b[i]</code> 可以提前算好），真正构成循环迭代间依赖的只有那一次浮点加法。设一次 FP 加法的延迟为 <strong>L</strong> 个周期，那么下一次加法必须等到上一次加法的结果，迭代间的<strong>循环进位依赖（loop-carried dependency）</strong>长度就是 L：</p>
+<div class="codeblock">
+  <div class="codebar"><span class="label">text</span><button class="copybtn">复制</button></div>
+  <pre data-code="每元素耗时 = L 周期        加法 IPC = 1 / L"></pre>
+</div>
+<p>这个 L 不是常数，随微架构变化。下面是真实测量值（数据来自 <a href="https://uops.info/html-instr/ADDSD_XMM_XMM.html" target="_blank" rel="noopener">uops.info</a> 的 <code>ADDSD xmm, xmm</code> 条目）：</p>
+<table><thead><tr><th>微架构</th><th>FP 加法延迟 L（周期）</th><th>倒数吞吐 TP（周期/条）</th><th>可同时执行的 FP 加端口数 P = 1/TP</th></tr></thead><tbody><tr><td>Intel Skylake</td><td>4</td><td>0.50</td><td>2</td></tr><tr><td>Intel Golden Cove</td><td>2</td><td>0.50</td><td>2</td></tr><tr><td>AMD Zen 4</td><td>3</td><td>0.50</td><td>2</td></tr><tr><td>AMD Zen 5</td><td>2</td><td>0.50</td><td>2</td></tr></tbody></table>
+<p>取 Skylake 的 L = 4 —— 这是教科书里那个"浮点加法四周期"的经典数字 —— 单累加器版本对 n 个元素的耗时就是 <strong>4n 个周期</strong>，加法 IPC 只有 0.25。这就是典型的"延迟受限（latency bound）"：流水线里同时只有一条链在被推进，其余所有功能单元都在空转。</p>
+<h3 id="1-2-k-k">1.2 k 条链：理论 k× 加速和它的三条硬上限</h3>
+<p>拆成 k 个累加器之后，链条变成 k 条互不相关的链：</p>
+<div class="codeblock">
+  <div class="codebar"><span class="label">c</span><button class="copybtn">复制</button></div>
+  <pre data-code="double s0 = 0, s1 = 0, s2 = 0, s3 = 0, s4 = 0, s5 = 0, s6 = 0, s7 = 0;
+for (int i = 0; i &lt; n; i += 8) {
+    s0 += a[i+0] * b[i+0];
+    s1 += a[i+1] * b[i+1];
+    /* ... s2 ~ s7 ... */
+}
+return (s0 + s1) + ((s2 + s3) + (s4 + s5)) + s7;   // 尾部归约"></pre>
+</div>
+<p>现在每次迭代产生 k 个独立的加法，它们可以同时占用不同的流水线通路的"执行"阶段。此时的加法吞吐上界是三层 constraints 的最小值：</p>
+<div class="codeblock">
+  <div class="codebar"><span class="label">text</span><button class="copybtn">复制</button></div>
+  <pre data-code="加法 IPC ≤ min( k / L ,  P ,  W )
+            ↑         ↑    ↑
+        依赖链上界   端口上界  宽度上界"></pre>
+</div>
+<p>三层分别对应：</p>
+<ul><li><strong>依赖链上界 k / L</strong>：k 条链各自每 L 周期吐出一个结果。</li><li><strong>端口上界 P</strong>：多数核心只有 2 到 3 个能干 FP 加法的端口，每周期最多完成 P 条。</li><li><strong>宽度上界 W</strong>：每周期能重命名/发射的总 uop 数（现代大核 6 到 10 不等）。</li></ul>
+<p>于是"收益拐点"可以直接算出来：当 <code>k / L ≥ P</code> 之后再增加 k 毫无意义，即</p>
+<div class="codeblock">
+  <div class="codebar"><span class="label">text</span><button class="copybtn">复制</button></div>
+  <pre data-code="k* = L × P"></pre>
+</div>
+<p>代入上表的实测数字：</p>
+<table><thead><tr><th>微架构</th><th>L</th><th>P</th><th>收益拐点 k*</th><th>说明</th></tr></thead><tbody><tr><td>Intel Skylake</td><td>4</td><td>2</td><td><strong>8</strong></td><td>站点用八个累加器，正好对应这一代 4 周期加法</td></tr><tr><td>AMD Zen 4</td><td>3</td><td>2</td><td><strong>6</strong></td><td>六条链之后再加没有收益</td></tr><tr><td>Intel Golden Cove</td><td>2</td><td>2</td><td><strong>4</strong></td><td>加法延迟砍到 2，四个累加器就饱和</td></tr><tr><td>AMD Zen 5</td><td>2</td><td>2</td><td><strong>4</strong></td><td>AMD 官方确认桌面版 Zen 5 的 FADD 从 Zen 4 的 3 周期降到 2 周期（<a href="https://www.tomshardware.com/pc-components/cpus/amd-deep-dives-zen-5-ryzen-9000-and-strix-point-cpu-rdna-3-5-gpu-and-xdna-2-architectures/4" target="_blank" rel="noopener">Tom's Hardware 引 AMD Hot Chips 2024</a>）</td></tr></tbody></table>
+<p>Skylake 上 k = 8 时 <code>k / L = 8/4 = 2.0</code>，恰好等于端口上界 P = 2 —— 这就是"八累加器时 IPC 上限 2.0"这句话的完整含义：<strong>它是"每周期完成的浮点加法数"的上限，不是总指令 IPC，而且它成立的前提是 L = 4。</strong></p>
+<p>如果换到 Zen 5，同样的八累加器代码 <code>8/2 = 4</code> 远超 P = 2，多出来的四条链纯粹是浪费；只需要 4 个累加器就能喂满两个 FP 加端口。手写展开的"魔法常数"是跟着实现跑的，这一点后面还会再提。</p>
+<h3 id="1-3-2-0">1.3 为什么实测还是到不了 2.0</h3>
+<p>把上面那条公式套到真实循环里还不够，因为一个元素除了加法还有别的活。标量 <code>double</code> 点积在每元素上大致需要：</p>
+<table><thead><tr><th>每元素的 uop</th><th>要占用的资源</th></tr></thead><tbody><tr><td>2 × load</td><td>load AGU 端口 + load 队列 + L1D 读口</td></tr><tr><td>1 × mul</td><td>FMA 端口（Skylake 上与 add 共用 p0/p1）</td></tr><tr><td>1 × add</td><td>FP add 端口</td></tr><tr><td>约 0.25 ~ 0.5 × 循环控制（展开后摊薄）</td><td>ALU / 分支端口</td></tr></tbody></table>
+<p>在 Skylake 上，mul 和 add 抢的是同一组端口 p0/p1，每元素共 2 个 FP uop ÷ 2 个端口 = <strong>1 周期/元素</strong>；而 2 次 load 除以 2 个 load 端口也是 <strong>1 周期/元素</strong>。两座资源同时把天花板按在 1 周期/元素上，于是：</p>
+<div class="codeblock">
+  <div class="codebar"><span class="label">text</span><button class="copybtn">复制</button></div>
+  <pre data-code="每元素耗时 = max( L/k , 资源上限 , 前端供给 )
+           = max( 4/k , 1      , ≈1     )   [Skylake 标量 double]"></pre>
+</div>
+<p>k = 1 时耗时 4 周期/元素；k = 4 时降到 1 周期/元素；k = 8 时<strong>仍然是 1 周期/元素</strong> —— 收益在 k = 4 就已经吃完了，后面四个累加器换来的只是"调度器更从容"，而不是理论上的第二倍加速。这解释了为什么实测常常只有 2 到 3 倍：8× 是依赖链单独作用的结果，一旦把 load、mul、循环开销也算进同一份端口预算，天花板早就压在别处了。</p>
+<p>顺带一提，从 Golden Cove 起 Intel 在向量引擎里加了一颗效率更高、延迟更低的专用快速加法器；到 Lion Cove 已经明确把 FMA 与 FADD 分到<strong>不同的向量端口</strong> —— 四条浮点/向量管线里，两条负责乘法与 FMA，另两条专门做浮点加法（端口布局见 <a href="https://cdrdv2-public.intel.com/824430/2024_Intel_Tech%20Tour%20TW_Next%20Gen%20P-core%20The%20Lion%20Cove%20Architecture-4.pdf" target="_blank" rel="noopener">Intel 官方 Lion Cove 架构幻灯片</a>，分工描述见 <a href="https://www.wikiwand.com/en/articles/Lion_Cove" target="_blank" rel="noopener">WikiChip 整理的 Lion Cove 对比表</a>）。这样一来 mul 和 add 不再互抢端口，代价是多一组执行单元的面积与对应的前递连线。</p>
+<h3 id="1-4">1.4 超过拐点还会变慢：寄存器压力</h3>
+<p>k 继续增大不但没收益，还可能负收益，原因有两层：</p>
+<p>第一层是<strong>物理寄存器耗尽</strong>。k 个累加器意味着 k 个值必须同时保持 live。当 k 超过可用物理寄存器数，编译器会把其中一部分 spill 到栈上 —— 于是每周期多了 store/load，直接打到 load/store 端口和 L1D 上，通常是灾难性的。这在 SMT 打开时更严重（见延伸知识点第 5 条）。</p>
+<p>第二层是<strong>尾部归约</strong>。k 个部分和在循环结束后要合成一个。用二叉树归约需要 log₂k 层加法，每层有依赖；如果对精度敏感还得按顺序加，那就是 k-1 次串行加法。这部分开销是 O(k) 或者 O(log k) 但每次条一级延迟，随着 k 增大而放大。</p>
+<p>所以工程上的经验值是：先把 k 取到 <code>L × P</code>（Skylake 类取 8，Zen 5 / Golden Cove 类取 4），然后实测微调。类似的"多份中间状态"思路在 <a href="../problems/streaming-square-sum.html">多累加器流式和</a> 里也是同一个道理。</p>
+<h3 id="1-5-perf">1.5 用 perf 验证而不是猜</h3>
+<p>Intel 平台上端口占用是可以直接读出来的：</p>
+<div class="codeblock">
+  <div class="codebar"><span class="label">bash</span><button class="copybtn">复制</button></div>
+  <pre data-code="perf stat -e cycles,instructions,\
+EXE_ACTIVITY.EXE_PORT_0,EXE_ACTIVITY.EXE_PORT_1,\
+EXE_ACTIVITY.BOUND_ON_PORTS,\
+UOPS_DISPATCHED_PORT.PORT_0,UOPS_DISPATCHED_PORT.PORT_1 ./bench
+
+# 或者用现成的 top-down 度量组（Linux perf 的 vendor events）
+perf stat -M tma_ports_utilized_0    # 每周期 0 uop 派发的周期占比
+perf stat -M tma_ports_utilized_3m   # 每周期 ≥3 uop 的周期占比"></pre>
+</div>
+<p><code>EXE_ACTIVITY.EXE_PORT_n</code> 计数的是"第 n 号端口被占用的周期数"，除以 <code>cycles</code> 就得到该端口利用率；<code>EXE_ACTIVITY.BOUND_ON_PORTS</code> 直接给出"因为拿不到端口而停顿"的周期占比。两套事件的编码在各代微架构上并不一致 —— Linux perf 用 vendor events 的 JSON 描述表自动处理这个差异，见 <a href="https://lkml.kernel.org/lkml/20240314055919.1979781-9-irogers@google.com" target="_blank" rel="noopener">perf vendor events 补丁邮件列表</a>。perf 内置的 <code>lpm_ports</code> 度量组会把每个 <code>UOPS_DISPATCHED.PORT_*</code> 除以 cycles，直接给出每个端口的利用率百分比。</p>
+<p>判据很直接：<strong>如果 BOUND_ON_PORTS 高而 k 还在增大</strong>,已经到拐点了；如果 <code>cycles</code> 高但所有端口利用率都很低，瓶颈在依赖链（加大 k 有用）；如果 <code>UOPS_EXECUTED</code> 低但前端 idq_uops_not_delivered 高，那是前端跟不上，跟 k 无关。</p>
+<hr>
+<h2 id="sec-8">二、硬件全景：一条指令要过的九道关卡</h2>
+<h3 id="2-1">2.1 从五级到二十级：为什么深流水线换高频</h3>
+<p>教科书上的经典五级流水线只有 IF / ID / EX / MEM / WB：取指、译码、执行、访存、写回。它的约束很朴素 —— <strong>一条指令的完整工作在五个"传送带节拍"内做完</strong>，所以时钟周期长度必须容忍最慢那一级（通常是访存或 ALU）的传播延迟。</p>
+<p>现代核心的做法是把每级再切细。以 Intel P6（Pentium Pro，1995）为例，它就把结构明确拆成了 <strong>8 级顺序前端 + 3 级乱序核心 + 3 级退休</strong>，共 14 级（<a href="https://people.cs.clemson.edu/~mark/330/colwell/case_p6.html" target="_blank" rel="noopener">Clemson 的 P6 案例分析 / Colwell 讲义</a>）。当代深流水线普遍在 <strong>12 到 20+ 级</strong>量级（厂商多已不再公布确切级数，此处为综合公开资料的量级估计，<strong>非官方数字</strong>）。</p>
+<p>深流水线的收益很直接：级间组合逻辑变少 → 每级的传播延迟变短 → <strong>主频可以更高</strong>。代价是两条：</p>
+<ul><li><strong>分支误预测惩罚 ≈ 流水线深度</strong>：猜错一次要冲掉整条管道里的所有气泡。Intel 官方报价：P6 误预测惩罚 10 到 15 个周期。这也是为什么深流水线必须配一个极强的前端预测器 —— 预测算法本身（TAGE、感知机、BTB 组织）请看 <a href="../reading/branch-prediction-guide.html">分支预测完全指南</a>，本文不重复。</li><li><strong>锁存器与时钟树开销</strong>：每一级边界都要一组触发器，级数翻倍意味着锁存开销和功耗线性上升，而实际有用的工作并没有变多。</li></ul>
+<h3 id="2-2">2.2 宽度从来不一致：所以要有解耦缓冲</h3>
+<p>一个常见的误解是"这是一个几发射的核心"。实际上一条指令要连续穿越多个宽度不同的瓶颈：</p>
+<table><thead><tr><th>阶段</th><th>它在做什么</th><th>典型宽度（代表下一节的核心）</th></tr></thead><tbody><tr><td>取指</td><td>从 L1I 读字节、预译码找指令边界</td><td>16 到 32 B/周期</td></tr><tr><td>译码</td><td>x86 → 定长 uop（ARM 这一步轻得多）</td><td>4 到 10 条/周期</td></tr><tr><td>uop cache</td><td>缓存已译码 uop，跳过译码</td><td>8 到 12 uop/周期（结构细节见 <a href="../reading/frontend-and-instruction-cache.html">前端与指令缓存</a> 篇）</td></tr><tr><td>重命名/分配</td><td>消除 WAW/WAR、分配 ROB 与物理寄存器</td><td>6 到 8 条/周期</td></tr><tr><td>发射/派发</td><td>就绪的 uop 送到执行端口</td><td>等于端口数（12 到 26 不等）</td></tr><tr><td>退休</td><td>按序提交架构状态</td><td>8 到 16 条/周期</td></tr></tbody></table>
+<p>前端产能是<strong>突发</strong>的（译码 x86 变长指令很吃力，uop cache 命中时又快又省电），后端执行是<strong>不规则</strong>的（依赖、cache miss 会让某些周期几乎全空）。两者之间必须插一层<strong>解耦缓冲（IDQ / uop queue）</strong>，让前端短暂停顿时后端还有活干，反之亦然。这也是为什么"前端比后端宽"或"后端比前端宽"都不致命，但没有缓冲就一定致命。</p>
+<p>注意<strong>重命名阶段天生是串行的</strong>：每条指令的目标寄存器必须按程序顺序映射到物理寄存器，否则无法恢复。这条约束在第三节还会回来限制"双译码集群"的设计。</p>
+<h3 id="2-3-raw">2.3 寄存器重命名：只有 RAW 是真相关</h3>
+<p>三条数据相关里：</p>
+<ul><li><strong>RAW</strong>（先写后读）：真相关，无法消除，只能用前递缩短。</li><li><strong>WAR</strong>（先读后写）与 <strong>WAW</strong>（写后写）：<strong>假相关</strong>，只是程序员/编译器复用了同一个架构寄存器名造成的。</li></ul>
+<p>重命名把架构寄存器（ISA 可见的 16 个 GPR / 32 个 FP 寄存器）映射到一大池<strong>物理寄存器（PRF）</strong>，每条写操作拿一个新的物理寄存器，于是两条写同一个 <code>xmm0</code> 的指令再无瓜葛 —— WAR 和 WAW 直接消失，只剩 RAW 需要等待。</p>
+<p>PRF 与 ROB 共同决定了<strong>乱序窗口</strong>能开多大：窗口 = 乱序引擎能同时看到多少条还没退休的指令，而其中能有多少条正在挂着等待结果，取决于 PRF 还有多少空闲条目。窗口开得大，理论上能越过更多 cache miss 延迟；代价是 ROB、PRF、调度队列都是多端口结构，<strong>面积与功耗随条目数超线性增长</strong>，而且访问延迟会随容量上升，反过来压主频。</p>
+<p>当 PRF 里的空闲条目用完时，重命名阶段就会<strong>停顿</strong>（stall at rename/alloc），整条前端堵住。这就是"寄存器重命名用完"这个说法的技术含义 —— 它不是一个错误，而是一个常规的性能瓶颈，perf 里表现为 <code>resource_stalls</code> 类事件升高。</p>
+<h3 id="2-4">2.4 执行端口与调度队列：资源冲突的物理位置</h3>
+<p>重命名之后的 uop 进入<strong>调度队列 / 保留站（Reservation Station, RS）</strong>，等待源操作数就绪。就绪后被"挑选（pick）"并送往某个执行<strong>端口</strong>。端口是物理概念：一条 64 字节宽的布线和一个功能单元接在上面，同一周期只能接一条 uop。</p>
+<p>典型的端口绑定约束（以 Intel Lion Cove 官方幻灯片为准）：V0 和 V2 是 FMA，V1 和 V3 是 FADD，只有 P6/P7 这类端口才带 MUL，<strong>只有部分 port 带 fdiv/fsqrt</strong>。因此一个纯浮点除法密集的循环，就算有再多的独立除法，也只能按除法单元的倒数吞吐排队 —— 这与前面讲的 FP 加是同一类约束，只是 P 从 2 降到了 1。</p>
+<p>调度队列有两种流派：</p>
+<ul><li><strong>集中式（统一调度队列）</strong>：一个队接所有端口。好处是任意端口空闲都能补给，不会出现"某条队列排满但别的队列连接的功能单元在空转"的假延迟。代价是挑选逻辑要比较所有条目， wakeup/select 复杂度是 O(N)。</li><li><strong>分布式（端口专属队列）</strong>：每个/每组端口一个短队。挑选逻辑简单，按老优先（oldest-first）也更容易实现，天然接近"最老的先挑"这个好策略。代价是跨队列的负载无法互相调剂。</li></ul>
+<p>AMD 和 Qualcomm 在 Hot Chips 2024 上恰好给出了相反的答案。Zen 5 把整数侧的多个队列<strong>统一</strong>成一个对称结构，AMD 的理由是这样不会出现"某条队列积压、而另一条队列连接的功能单元在空转"的假延迟（<a href="https://chipsandcheese.com/p/discussing-amds-zen-5-at-hot-chips-2024" target="_blank" rel="noopener">Chips and Cheese, Hot Chips 2024 现场记录</a>）；代价是必须显式实现 age-aware 的挑选逻辑才能做到"最老的先挑"。Qualcomm 的 Gerard Williams 则主张分布式：队列越分散、每队条目越少，"多条同时就绪"的概率就越低，行为自然就近于 oldest-first。这不是非黑即白的问题 —— 业界至今没有共识。</p>
+<h3 id="2-5-stage">2.5 数据前递：把写回 stage 提前一级</h3>
+<p>写回再加读寄存器的路径会让 RAW 串行的长度 = Latency(EX) + 1（写回）+ 1（读）。<strong>前递网络（bypass / forwarding network）</strong>在 EX 输出端直接拉一根线到所有功能单元的输入端，让下一条指令在同一个周期就能拿到上一条的结果。</p>
+<p>代价是<strong>布线面积与功耗极其昂贵</strong>：一个有 N 个功能单元、每个单元 2 个源操作数的核心，前递网络近似是 N × N 的多路选择连线，且必须在关键路径上跑满一个时钟周期。这也是为什么"加一个执行单元"从来不是线性成本 —— 加它会让前递网络长出 N 条新连线，并让所有已有的连线负载电容变大、延迟变长。<strong>这是"更宽"的隐性上限</strong>。</p>
+<h3 id="2-6">2.6 顺序退休：只讲它在流水线里的位置</h3>
+<p>乱序执行出去的结果不能乱序提交出去，否则异常无法精确定位、也无法回滚。<strong>重排序缓冲（ROB）</strong>就是干这个的：指令按程序顺序进 ROB，乱序执行完毕后在里面标记"已完成"，然后按程序顺序离开 ROB 时才写回架构状态。</p>
+<p>注意一个关键演进：早期设计（如 P6）<strong>结果就存在 ROB 里</strong>（40 条目 ROB 兼作 PRF），现代设计改成了 <strong>PRF-based</strong>：ROB 只保存状态和顺序信息，数据存在独立的物理寄存器堆里，退休只是"解除映射"。这大大减少了写回的数据搬运。ROB 的内部结构、它是怎么做异常恢复的，请看本站 <a href="../reading/rob-out-of-order-complete-guide.html">ROB 篇</a>，本文不重复。</p>
+<hr>
+<h2 id="sec-15">三、演进史：每一步解决了什么问题，又引入了什么代价</h2>
+<h3 id="3-1-cdc-6600-1964-scoreboard">3.1 CDC 6600（1964）：scoreboard，动态调度的雏形</h3>
+<p>Seymour Cray 和 James Thornton 设计的 CDC 6600 有 10 个独立功能单元（多个加法器、两个乘法器、除法器、移位、布尔、增量器），每 100 ns 发射一条指令，而功能单元要 300 到 400 ns 才完成。为了不让一条慢除法堵住后面所有指令，它引入了一块叫做 <strong>scoreboard（记分牌）</strong> 的硬件来跟踪"哪个寄存器正被谁写、哪个功能单元忙"（<a href="https://www.icsa.inf.ed.ac.uk/research/groups/hase/models/6600/index.html" target="_blank" rel="noopener">Thornton, Design of a Computer: The Control Data 6600, 1970；爱丁堡大学 HASE 6600 模型说明</a>）。</p>
+<ul><li><strong>解决</strong>：顺序发射但<strong>乱序完成</strong>，慢操作不再阻塞无关指令。实测性能提升 FORTRAN 程序约 1.7 倍、手编汇编约 2.5 倍。</li><li><strong>代价</strong>：没有寄存器重命名，遇到 WAR 要阻塞写回、遇到 WAW 要阻塞发射；而且因为发射是顺序的，<strong>一条卡住的指令会堵住后面所有指令</strong>（因为它背后的发射通路只有一条）。</li></ul>
+<h3 id="3-2-ibm-system-360-model-91-1967-tomasulo">3.2 IBM System/360 Model 91（1967）：Tomasulo 算法</h3>
+<p>Robert Tomasulo 在 1967 年发表《An Efficient Algorithm for Exploiting Multiple Arithmetic Units》（IBM Journal of R&amp;D, 11(1): 25-33），在 Model 91 的浮点单元上首次实现。三个原创构件：<strong>寄存器重命名</strong>（tag 替代值）、<strong>每个功能单元前的保留站</strong>、以及 <strong>公共数据总线 CDB</strong>（结果广播给所有在等的保留站）（<a href="https://prod.wikiwand.com/en/articles/Imprecise_exception" target="_blank" rel="noopener">Tomasulo 算法综述</a>）。Tomasulo 因此获得 1997 年 Eckert-Mauchly 奖。</p>
+<ul><li><strong>解决</strong>：假相关（WAR、WAW）被彻底消除；依赖通过" tag 匹配 + CDB 广播"解决，是一种受限的数据流执行。</li><li><strong>代价</strong>：两条。其一，<strong>非精确异常（imprecise exception）</strong> —— 乱序执行时无法确定是哪条指令触发的异常，无法重启；其二，<strong>CDB 是全局广播总线</strong>，面积和功耗随功能单元数增长，成为缩放瓶颈（现代设计改用点对点/分段的 wakeup 网络）。</li></ul>
+<h3 id="3-3">3.3 超标量顺序执行：被假相关卡住的一代</h3>
+<p>CDC 6600 和 Model 91 都是每周期发射一条指令。RISC 出现后，1980 年代末到 1990 年代初涌现了一批多发射的<strong>顺序</strong>处理器：SuperSPARC、早期的 Pentium（U/V 双流水）等。它们能同时跑两三条指令，但一旦某条卡住，<strong>后面全部跟着卡</strong>。</p>
+<p>问题在于，当时的编译器不敢做激进的寄存器分配（循环展开会人为造成大量 WAW/WAR），于是硬件需要重命名才能拉开 ILP —— 而顺序机没有。<strong>这一代的天花板是"顺序"本身，不是宽度</strong>。</p>
+<h3 id="3-4-p6-pentium-pro-1995-rob-tomasulo">3.4 P6 / Pentium Pro（1995）：ROB 把 Tomasulo 的思路做成可量产的通用核心</h3>
+<p>Intel P6 把"解耦的超标量"落地了（<a href="https://www.cl.cam.ac.uk/teaching/0203/CompArch/Gwennap95-P6_Microarchitecture.pdf" target="_blank" rel="noopener">Microprocessor Report 1995</a>、<a href="https://people.cs.clemson.edu/~mark/330/colwell/case_p6.html" target="_blank" rel="noopener">Colwell 的 P6 讲义</a>）：</p>
+<ul><li>顺序前端 8 级，每周期译码最多 3 条 x86 指令（只有一条能是复杂指令），每条展开成 1 到 4 个 uop；</li><li><strong>40 条目 ROB</strong>，既做顺序退休又当物理寄存器堆；</li><li><strong>20 条目保留站</strong>，每周期最多向 5 个执行单元派发 5 个 uop；</li><li>退休 3 个 uop/周期；FP 加法 3 周期；误预测惩罚 10 到 15 周期。</li><li><strong>解决</strong>：把 x86 翻译成类 RISC 的定长 uop 之后做动态调度，既保留 ISA 兼容，又拿到了 ILP；并第一次把<strong>精确异常 + 顺序退休</strong>做进产品（这就是 ROB 诞生的动因，结构细节见 <a href="../reading/rob-out-of-order-complete-guide.html">ROB 篇</a>）。</li><li><strong>代价</strong>：x86 译码器复杂且能耗高；只有 FP 寄存器被重命名（Model 91 的遗留限制）；40 条目窗口在今天的尺度里小得可怜。</li></ul>
+<h3 id="3-5-prf-based-1990">3.5 现代 PRF-based 设计（1990 年代末至今）</h3>
+<p>P6 之后的两大变化：</p>
+<ol><li><strong>ROB 不再存数据</strong>。数据搬到独立的 PRF，ROB 只留状态。这让同样的 ROB 条目数下可以支持更大的窗口，也让写回路径短了不少。</li><li><strong>调度队列从单一集中走向分布/分组</strong>。见 2.4 节的流派之争。</li></ol>
+<p>同时宽度持续扩张：重命名/发射宽度从 P6 的 3 uop/clk 一路走到今天的 8 uop/clk —— Intel 侧 Haswell/Skylake 是 4-wide、Golden Cove 6-wide、Lion Cove 8-wide；AMD 侧 Zen 4 是 6-wide、Zen 5 提到 8-wide（<a href="https://chipsandcheese.com/p/discussing-amds-zen-5-at-hot-chips-2024" target="_blank" rel="noopener">Chips and Cheese</a>）。具体对照见第四节的表。</p>
+<p>到这里，"宽"这件事开始遇到三个物理上限：<strong>前递网络的 N² 代价</strong>、<strong>多端口寄存器堆的访问延迟与面积</strong>、以及<strong>程序本身可用的 ILP 有限</strong>。业界给出的答案开始分化。</p>
+<h3 id="3-6-2024-ooo">3.6 2024 这一代的"分裂":双译码集群与拆分 OoO 引擎</h3>
+<p>2024 年两家同时动了前端：</p>
+<p><strong>AMD Zen 5 的双译码集群</strong>：两个独立的 4-wide 译码通道，取指宽度从 Zen 4 的 16 B/周期翻倍到 32 B/周期，汇入统一的 uop queue，再进 8-wide 重命名/发射/退休（<a href="https://www.tomshardware.com/pc-components/cpus/amd-deep-dives-zen-5-ryzen-9000-and-strix-point-cpu-rdna-3-5-gpu-and-xdna-2-architectures/4" target="_blank" rel="noopener">AMD, Hot Chips 2024；Tom's Hardware 报道</a>）。</p>
+<p>这里有个非常值得记住的反直觉细节：<strong>单线程模式下 Zen 5 只用其中一个译码集群</strong>。AMD 工程师在 Hot Chips 场边对 Chips and Cheese 解释的原因是，两集群出来的 uop 流要在 uop queue 处重新按序缝合，而 uop queue 必须是顺序的 —— 因为它要喂给重命名器，而重命名本质上串行（<a href="https://chipsandcheese.com/p/discussing-amds-zen-5-at-hot-chips-2024" target="_blank" rel="noopener">Chips and Cheese 现场记录</a>）。所以双集群主要是<strong>为 SMT 服务的</strong>：两个线程各自占一个集群。AMD 也坦承 5.7 GHz 的频率目标让"两个集群同时服务单线程"比在低电压小核上做要难得多。</p>
+<p><strong>Intel Lion Cove 的拆分引擎</strong>：Lion Cove 没有做双译码集群，而是走另一条路 —— 单条 <strong>8-wide 译码</strong>（Redwood Cove 是 6-wide），但把乱序引擎<strong>拆成整数域和向量域</strong>，两者各带独立的重命名器、独立访问 uop queue、独立调度器（<a href="https://cdrdv2-public.intel.com/824430/2024_Intel_Tech%20Tour%20TW_Next%20Gen%20P-core%20The%20Lion%20Cove%20Architecture-4.pdf" target="_blank" rel="noopener">Intel 官方 Lion Cove 幻灯片</a>、<a href="https://www.techpowerup.com/review/intel-core-ultra-9-285k/3.html" target="_blank" rel="noopener">TechPowerUp Arrow Lake 架构篇</a>）。同时 12-wide 退休、8-wide 分配、576 条目窗口、18 个执行端口。</p>
+<ul><li><strong>解决</strong>：两边的数据通路、寄存器堆、调度器都不共享，<strong>省掉了另一侧的布线代价</strong>；Intel 明确说这是为了让两个域可以独立演进（改整数侧不用重做向量侧）。</li><li><strong>代价</strong>：资源不能跨域调剂 —— 一个纯整数的负载无法借用向量域空闲的重命名带宽。</li></ul>
+<h3 id="3-7-epic">3.7 被淘汰的两条路：EPIC 和超长流水线</h3>
+<p><strong>VLIW / EPIC（Itanium, IA-64）</strong>：Intel 与 HP 1994 年起合作，试图让<strong>编译器</strong>在编译期就把并行性写好（每条 bundle 里放 3 条指令 + 模板位），从而删掉硬件那套昂贵的动态调度逻辑。</p>
+<p>失败原因是结构性的，不止一个：</p>
+<ol><li><strong>编译器看不到 cache miss</strong>。静态调度必须预知运行时的访存延迟，而这不可能是编译期常量。这是根本性的信息不对称 —— 乱序硬件有编译器永远拿不到的运行时信息。Donald Knuth 的评价是：Itanium 需要的那种编译器"基本上不可能写出来"。</li><li><strong>指令宽度被固化进指令集</strong>。如果一条 bundle 固定装 3 条指令，下一代芯片能做到 6 宽度时，两个 bundle 之间可能存在依赖 —— 无法并行。结果只有两个选项：要么新一代芯片只跑一半的硬件能力，要么每一代都要重新编译发布。软件发布方不可能为每个宽度发一个版本。</li><li><strong>代码膨胀</strong>：找不到并行时编译器必须塞 nop，实测 VLIW bundle 让代码体积膨胀 3 到 6 倍（<a href="http://web.eece.maine.edu/~vweaver/papers/iccd09/iccd09_density.pdf" target="_blank" rel="noopener">Weaver, ICCD 2009</a>），反过来吃掉宝贵的取指带宽。</li><li><strong>生态时机</strong>：AMD 2003 年推出向后兼容的 x86-64（Opteron），客户不用重写就有 64 位。Intel 一年后自己把这套扩展克隆成 EM64T。Itanium 的 x86 兼容模式只有奔腾级性能。</li></ol>
+<p>最终 Intel 于 2020 年 1 月停止接受新订单，2021 年 7 月交付最后一批（<a href="https://philosophersston.ee/knowledge/why-itanium-failed" target="_blank" rel="noopener">Itanium 失败复盘</a>）。<strong>教训</strong>：把调度责任下放给编译器这件事，只在你能保证所有信息都是编译期常量时成立 —— 而 cache 恰恰不是。</p>
+<p><strong>NetBurst 超长流水线（Pentium 4）</strong>：Intel 2000 年的 NetBurst 架构把流水线拉到极长以追求主频，Willamette 20 级，2004 年的 Prescott 加到 <strong>31 级</strong>（<a href="https://www.anandtech.com/show/1230/3" target="_blank" rel="noopener">AnandTech Prescott 架构分析</a>、<a href="https://www.tomshardware.com/reviews/intel,751-5.html" target="_blank" rel="noopener">Tom's Hardware Prescott 评测</a>）。</p>
+<ul><li><strong>代价</strong>：31 级流水线意味着误预测一次要冲掉整条管道；同频 IPC 显著低于更短的竞争对手；90 nm Prescott 的热量密度使得 4 GHz、乃至原定 10 GHz 的目标在功耗现实面前失败，"PresHot" 的绰号由此而来。Intel 2006 年转向基于 P6 血统改造的 Core 微架构，NetBurst 产品线 2007 年底停产。</li></ul>
+<p>这两次失败划出了深流水线和静态调度的实际边界，此后二十年所有人都在同一条路上前进：<strong>动态调度 + 适度深的流水线 + 极强的前端预测</strong>。</p>
+<hr>
+<h2 id="2024-2026">四、真实处理器对比（2024–2026）</h2>
+<p>下面三项分表列出。<strong>所有数字后面标注来源与年份；凡是厂商未公开、只能靠第三方测量的，一律显式标注。</strong></p>
+<h3 id="4-1">4.1 前端宽度</h3>
+<table><thead><tr><th>核心</th><th>译码宽度</th><th>uop cache</th><th>重命名/分配</th><th>退休</th><th>乱序窗口（条目）</th></tr></thead><tbody><tr><td>Intel Golden Cove (2021)</td><td>6 uop/clk</td><td>4096 条 8-way</td><td>6-wide</td><td>8-wide</td><td>512（<a href="https://en.wikichip.org/w/index.php?title=intel/microarchitectures/golden_cove&amp;direction=prev&amp;oldid=99739" target="_blank" rel="noopener">WikiChip</a>）</td></tr><tr><td>Intel Redwood Cove (2023)</td><td>6-way</td><td>4096 条 8-way</td><td>6-wide</td><td>8-wide</td><td>512</td></tr><tr><td>Intel Lion Cove (2024)</td><td><strong>8-way</strong>（官方幻灯片）</td><td>5250 条 12-way</td><td><strong>8-wide</strong></td><td><strong>12-wide</strong></td><td><strong>576</strong></td></tr><tr><td>AMD Zen 4 (2022)</td><td>4 instr/clk</td><td>6.75K 条</td><td>6-wide</td><td>6-wide</td><td>320（<a href="https://www.techpowerup.com/review/amd-ryzen-7-9700x/2.html" target="_blank" rel="noopener">TechPowerUp</a>）</td></tr><tr><td>AMD Zen 5 (2024)</td><td><strong>2 × 4 instr/clk</strong>（双集群，单线程只开一侧）</td><td>6K 条 16-way</td><td><strong>8-wide</strong></td><td>8-wide</td><td>448</td></tr><tr><td>ARM Neoverse V2 (2023)</td><td>8-wide（带 MOP cache）</td><td>有 MOP cache</td><td>未找到官方数据</td><td>未找到官方数据</td><td>320 MOP（第三方实测）</td></tr><tr><td>ARM Neoverse V3 (2024–25)</td><td><strong>10-wide</strong>（官方 SOG）</td><td><strong>无</strong>（V3 删除了 MOP cache）</td><td>派发 10 MOP / 20 uOP/clk</td><td>未找到官方数据</td><td>384 MOP（第三方实测）</td></tr><tr><td>ARM Cortex-X925 (2024)</td><td>10-wide</td><td>无</td><td>未找到官方数据</td><td>未找到官方数据</td><td>768（第三方，见下文）</td></tr><tr><td>Apple M4 P-core (2024)</td><td>≥10（第三方推断）</td><td>未公开</td><td>未找到官方数据</td><td>未找到官方数据</td><td>约 3184 uop / 313 融合组（第三方实测）</td></tr></tbody></table>
+<p>Neoverse V3 与 Cortex-X925 的实测数据来自 <a href="https://jia.je/hardware/2026/06/13/arm-neoverse-v3" target="_blank" rel="noopener">杰哥的 Neoverse V3 微架构评测（2026）</a>，Apple M4 数据来自 <a href="https://jia.je/hardware/2025/05/21/apple-m4/" target="_blank" rel="noopener">杰哥的 Apple M4 微架构评测（2025）</a>，<strong>两者均为第三方黑盒测量而非厂商公布</strong>。X925 的 768 条在飞窗口由 Chips and Cheese 分析给出。</p>
+<h3 id="4-2-apple-8-10-uop-clk-arm">4.2 Apple 为什么能做到 8–10 uop/clk：不只是"ARM 指令规整"</h3>
+<p>常见的说法是"AArch64 指令定长所以译码便宜"。这只讲了一半。真正让 Apple 堆到这个宽度的还有两条：</p>
+<p>第一条是<strong>持续 uop 吞吐目标就是这么定的</strong>。Apple 官方的《Apple Silicon CPU Optimization Guide》明写 M 系列家族 P-core 每周期持续交付的 uop 数为：M1 = 8、M3 = 9、<strong>M4 = 10</strong>（E-core 为 M1 = 4、M4 = 5），而 jia.je 的实测 IPC 曲线也确实在 M4 P-core 上跑到了 10 —— 这说明宽度不是某个局部结构的名字，而是整条通路协同的结果。</p>
+<p>第二条是<strong>激进的指令融合</strong>。第三方逆向出的 Firestorm 融合表里，<code>cmp/cmtst + b.cc</code>、<code>add/sub + cbz/cbnz</code>、<code>aese + aesmc</code>、<code>pmull + eor</code> 等组合在满足寄存器条件的相邻位置会被合成一个 uop（<a href="https://dougallj.github.io/applecpu/firestorm.html" target="_blank" rel="noopener">dougallj/applecpu, Firestorm 文档</a>）。也就是说，"10-wide"实际消化的原始指令远多于 10 条。<strong>注意：uop cache 的内部结构属前端范畴，本文不展开，见 <a href="../reading/frontend-and-instruction-cache.html">前端与指令缓存</a> 篇。</strong></p>
+<p>还有一个容易忽略的点：Apple 的宽不是白来的 —— M4 P-core 的 ROB 容限被第三方测到约 <strong>3184 个 uop / 313 个融合组</strong>，是 x86 大核的 5 到 6 倍量级（同样为<strong>第三方逆向估计，Apple 未公布</strong>）。没有这么大的窗口，10-wide 的前端毫无意义。</p>
+<h3 id="4-3">4.3 后端：端口、寄存器、调度队列</h3>
+<table><thead><tr><th>维度</th><th>Intel Lion Cove (2024)</th><th>AMD Zen 5 (2024)</th><th>ARM Neoverse V3 (2024–25)</th><th>Apple M4 P-core (2024)</th></tr></thead><tbody><tr><td>执行端口数</td><td><strong>18</strong>（Redwood Cove 12）</td><td>6 ALU + 4 AGU + FP 侧的多个 pipe</td><td>—</td><td>16 个执行单元（第三方推断）</td></tr><tr><td>整数 ALU</td><td>6</td><td>6（Zen 4 为 4）</td><td>官方标称 8（实测 int add 只到 6 IPC）</td><td>8（第三方推断）</td></tr><tr><td>分支单元</td><td>3</td><td>3</td><td>3</td><td>—</td></tr><tr><td>FP / SIMD</td><td>2×FMA + 2×独立 FADD + 2×div + 4 SIMD ALU</td><td>4 条 512-bit FP 管线；桌面版 FADD 延迟 2 周期</td><td>4 × 128-bit SIMD</td><td>4（第三方推断）</td></tr><tr><td>访存</td><td>多个 AGU，48 KB L0D + 192 KB L1D</td><td>4 load + 2 store/clk；48 KB 12-way L1D</td><td>1 LS + 2 LD + 1 ST pipe</td><td>3 load + 2 sta + 2 std（突发）</td></tr><tr><td>整数物理寄存器</td><td>未找到官方数据</td><td>240（Zen 4 为 224）</td><td>约 400 个 64-bit 物理寄存器，拆成两半可当 32-bit 用（第三方实测推算）</td><td>360（64-bit）／720（32-bit，同一份寄存器堆的拆半用法）（第三方实测）</td></tr><tr><td>向量物理寄存器</td><td>未找到官方数据</td><td>384 × 512-bit（Zen 4 为 192）</td><td>未找到官方数据</td><td>未观察到明显拐点，"与 M1 相近"（第三方）</td></tr><tr><td>调度队列</td><td>INT/VEC 各自独立</td><td>ALU 调度器 88 条、AGU 调度器 56 条（统一化）</td><td>未找到官方数据</td><td>未找到官方数据</td></tr></tbody></table>
+<p>Lion Cove 与 Zen 5 的数字来自前面引用的 <a href="https://cdrdv2-public.intel.com/824430/2024_Intel_Tech%20Tour%20TW_Next%20Gen%20P-core%20The%20Lion%20Cove%20Architecture-4.pdf" target="_blank" rel="noopener">Intel 官方幻灯片</a> 和 <a href="https://www.techpowerup.com/review/amd-ryzen-7-9700x/2.html" target="_blank" rel="noopener">TechPowerUp Zen 5 架构篇</a>。注意 Zen 5 的向量寄存器全部是完整 512 位宽（Zen 4 是 256 位双泵），这是 Zen 5 FP 侧在 SPEC FP 项目上大幅领先的关键之一。</p>
+<h3 id="4-4">4.4 同一代的两个答案</h3>
+<p>把 Lion Cove 和 Zen 5 放在一起看，它们是同一道题的两个不同答案：</p>
+<ul><li><strong>Zen 5 赌宽度</strong>：8-wide rename/发射/退休、6 个 ALU、4 个 AGU、448 窗口、240/384 的物理寄存器。代价是把 ALU/AGU 调度器统一之后，"老优先"挑选必须显式实现（age-aware scheduler 的复杂度）。</li><li><strong>Lion Cove 赌深度+分域</strong>：576 窗口（比 Zen 5 大 28%）、12-wide 退休、8-wide 分配，但把 INT/VEC 一刀切开，各自成人只用一半資源。此外 Intel 这一代彻底移除了 SMT，拿回来的面积和功耗预算全投进了前端和分域引擎。</li></ul>
+<p>没有哪一边明显更优，因为答案取决于负载里到底有多少 ILP —— 而这正是第一节那条公式在起作用：<strong>如果程序本身就是一条 4 周期的链，两边再宽再深都没用。</strong></p>
+<hr>
+<h2 id="sec-28">五、延伸知识点</h2>
+<ol><li><strong>IPC 上限是三层取小，不是一个因素</strong>。准确形式是 <code>IPC ≤ min(k/L, P, W)</code>：依赖链决定的 <code>k/L</code>、端口决定的 <code>P</code>、宽度决定的 <code>W</code>。三者里取最小的那个才是瓶颈。只算"延迟 × 并行度"会高估，只算端口会忽略链的影响 —— 这也是为什么"听说多累加器会变快"这种定性描述没意义，必须算出 k* 在哪。</li><li><strong>累加器收益拐点的算法</strong>：<code>k* = L × P</code>，其中 L 是依赖操作的延迟、P 是每周期能执行该操作的端口数。算例：Skylake <code>4 × 2 = 8</code>；Zen 4 <code>3 × 2 = 6</code>；Golden Cove / Zen 5 <code>2 × 2 = 4</code>。再往上加累加器不但没有收益，还会因为 live value 变多而增加寄存器压力，一旦 spill 几乎是净亏。</li><li><strong>-O3 的展开倍数不是越大越好</strong>。GCC/Clang 的自动展开（<code>unrollN</code>、unroll-and-jam）会根据代价模型选倍数，但如果你手动 <code>#pragma GCC optimize("unroll-loops")</code> 或写 <code>__attribute__((optimize("O3","unroll-loops")))</code> 把倍数顶到很大，会有三个退化：一是超过 k* 后前端只是白发射；二是 live value 变多导致 spill；三是代码体积涨大，超出 L1I（典型 32 到 192 KB）之后每次循环都要重新取指。判断是否过了头的最快办法是比较 <code>perf stat</code> 里的 <code>instructions</code> 有没有变化：如果不变量操作没变而 <code>uops_issued</code> 涨了，那就是白轮。</li><li><strong>看端口占用的两个事件</strong>：<code>EXE_ACTIVITY.EXE_PORT_n</code> 给每个端口的占用周期数（除以 <code>cycles</code> 得利用率），<code>EXE_ACTIVITY.BOUND_ON_PORTS</code> 直接给"因端口冲突而停顿"的周期占比。Linux perf 的 <code>-M tma_ports_utilized_0/1/2/3m</code> 已把这些打包成可读的"每周期 0/1/2/≥3 个 uop"分布，非常适合快速判断是不是命中了 <code>P</code> 那一层。</li><li><strong>SMT 会抢物理寄存器，这是它最主要的隐式代价</strong>。两个硬件线程共享同一个 PRF 和同一个 ROB（多数实现是静态分区或限制单线程上限，详情见 <a href="../reading/rob-out-of-order-complete-guide.html">ROB 篇</a>）。所以你那条精心调到 k = 4 依赖链的代码，在 SMT 打开时可能因为物理寄存器被邻居分走而触发 spill。反过来看，这也解释了 Zen 5 为什么要做双译码集群：SMT 场景下 op cache 的命中率更低，两个线程会同时依赖真实的译码通路，才需要成倍地拉开前端带宽（<a href="https://chipsandcheese.com/p/discussing-amds-zen-5-at-hot-chips-2024" target="_blank" rel="noopener">Chips and Cheese</a>）。如果你的单线程延迟敏感负载跑在 SMT 机器上，测出来的数字和"关掉 SMT"的版本不是一个数。</li><li><strong>IPC 高不等于快</strong>。这篇文章通篇在讲 IPC，但完成时间是 <code>指令数 × CPI / 主频</code>。三个因子都不是 IPC 单独能决定的：同样一段 IPC = 2.5 的代码，跑在 5.7 GHz 的核心上比跑在 3.8 GHz 的核心上快约 50%；反过来 Arm Cortex-X925 虽然达到了较高的 IPC，但因为要执行更多条指令（部分 SPEC CPU 项目上 ARM 的指令数比 x86 多出一倍以上）与主频劣势，总耗时并不占优。评价性能必须同时看这三样，<code>perf stat</code> 里就是 <code>instructions</code>、<code>cycles</code>、<code>task-clock</code> 的组合。</li><li><strong>再精妙的魔法常数也会过期</strong>。同一份手写八累加器代码，在 Skylake 上正好卡住拐点，在 Zen 5 上多了一半，在未来某个把 FADD 降到 1 周期的核心上多余更多。所以写这类优化时，把展开倍数做成<strong>宏或模板参数</strong>，并在 README 里写明"这个值是在 L=?、P=? 的机器上调出来的"。依赖链分析的结论（"要先拆依赖"）是稳定的，具体数字不是。</li></ol>
+<hr>
+<h2 id="sec-29">参考来源</h2>
+<ul><li><a href="https://uops.info/html-instr/ADDSD_XMM_XMM.html" target="_blank" rel="noopener">uops.info <code>ADDSD xmm, xmm</code> 指令表</a> —— 支撑本文所有 FP 加法延迟与吞吐数字（Skylake 4 / Zen 4 3 / Zen 5 2 / Golden Cove 2 周期），是 k* 公式的输入（2024–2025 持续更新）</li><li><a href="https://cdrdv2-public.intel.com/824430/2024_Intel_Tech%20Tour%20TW_Next%20Gen%20P-core%20The%20Lion%20Cove%20Architecture-4.pdf" target="_blank" rel="noopener">Intel Lion Cove 官方架构幻灯片（2024 Intel Tech Tour TW）</a> —— 一手来源，支撑 8-wide 译码、12-wide µop cache、8-wide 分配重命名、端口绑定（V0/V2 FMA、V1/V3 FADD）、INT/VEC 分域（2024）</li><li><a href="https://www.techpowerup.com/review/intel-core-ultra-9-285k/3.html" target="_blank" rel="noopener">TechPowerUp Arrow Lake 架构评测</a> —— 支撑 Lion Cove 的 12-wide 退休、576 窗口、18 端口，以及 Skymont 的 9-wide 译码 / 16-wide 退休 / 416 窗口（2024）</li><li><a href="https://www.techpowerup.com/review/amd-ryzen-7-9700x/2.html" target="_blank" rel="noopener">TechPowerUp Zen 5 架构评测（Ryzen 7 9700X）</a> —— 支撑 Zen 5 的 8-wide 派发/退休、6 ALU + 4 AGU、240/384 物理寄存器、448 窗口、Zen 4 对照值（2024）</li><li><a href="https://chipsandcheese.com/p/discussing-amds-zen-5-at-hot-chips-2024" target="_blank" rel="noopener">Chips and Cheese: Discussing AMD's Zen 5 at Hot Chips 2024</a> —— 支撑"双译码集群单线程只用一侧""统一 vs 分布式调度队列之争""8-wide renamer"（2024）</li><li><a href="https://www.tomshardware.com/pc-components/cpus/amd-deep-dives-zen-5-ryzen-9000-and-strix-point-cpu-rdna-3-5-gpu-and-xdna-2-architectures/4" target="_blank" rel="noopener">Tom's Hardware 引 AMD Hot Chips 2024</a> —— 支撑桌面 Zen 5 的 FADD 延迟由 3 降到 2 周期、双 4-wide 译码派设计（2024）</li><li><a href="https://jia.je/hardware/2025/05/21/apple-m4/" target="_blank" rel="noopener">杰哥的 Apple M4 微架构评测</a> —— 第三方实测，支撑 M4 P-core 持续 10 uop/clk、约 3184 uop ROB、360 个 64-bit 物理整数寄存器、16 个执行单元（2025，非 Apple 官方数字）</li><li><a href="https://dougallj.github.io/applecpu/firestorm.html" target="_blank" rel="noopener">dougallj/applecpu: Firestorm 文档</a> —— 第三方逆向，支撑 Apple 的指令融合清单与 8 uop/clk 管线宽度限制（2021 起持续更新）</li><li><a href="https://jia.je/hardware/2026/06/13/arm-neoverse-v3" target="_blank" rel="noopener">杰哥的 ARM Neoverse V3 微架构评测</a> —— 第三方实测 + 官方手册引述，支撑 10-wide 译码、派发 10 MOP/20 uOP、384 MOP ROB、8 ALU / 3 分支 / 4 SIMD、1LS+2LD+1ST（2026）</li><li><a href="https://fuse.wikichip.org/news/7761/arm-launches-next-gen-flagship-cortex-x925/" target="_blank" rel="noopener">WikiChip Fuse: Arm Launches Next-Gen Flagship Cortex-X925</a> —— 支撑 Cortex-X925 的 10-wide 译码派发与翻倍指令窗口（2024）</li><li><a href="https://www.wikiwand.com/en/articles/Lion_Cove" target="_blank" rel="noopener">WikiChip 整理的 Lion Cove 对比表</a> —— 支撑 Lion Cove 的 8-way 译码、8-way 分配重命名、12-wide 退休、576 窗口、18 端口、向量域"两条乘法/FMA + 两条浮点加"的分工，以及 Redwood Cove 对照值（2024）</li><li><a href="https://en.wikichip.org/w/index.php?title=intel/microarchitectures/golden_cove&amp;direction=prev&amp;oldid=99739" target="_blank" rel="noopener">WikiChip Golden Cove</a> —— 支撑 Golden Cove 的 ROB 512 条目、12 执行端口（2021）</li><li><a href="https://www.cl.cam.ac.uk/teaching/0203/CompArch/Gwennap95-P6_Microarchitecture.pdf" target="_blank" rel="noopener">Microprocessor Report 1995: Intel's P6 Uses Decoupled Superscalar Design（剑桥存档）</a> —— 支撑 P6 的 40 条目 ROB、20 条目保留站、每周期 5 uop 派发、3 uop 退休（1995）</li><li><a href="https://people.cs.clemson.edu/~mark/330/colwell/case_p6.html" target="_blank" rel="noopener">Clemson / Colwell 的 Intel P6 案例分析</a> —— 支撑 P6 的 8+3+3 级流水分段与 10–15 周期误预测惩罚（1990s）</li><li><a href="https://www.icsa.inf.ed.ac.uk/research/groups/hase/models/6600/index.html" target="_blank" rel="noopener">爱丁堡大学 HASE CDC 6600 模型与设计说明</a> —— 支撑 CDC 6600 的 scoreboard、10 个功能单元、100 ns 发射 / 300–400 ns 完成（基于 Thornton 1970 原著）</li><li><a href="https://prod.wikiwand.com/en/articles/Imprecise_exception" target="_blank" rel="noopener">Tomasulo 算法综述（Wikiwand）</a> —— 支撑 1967 年论文出处、三个原创构件、非精确异常与 CDB 缩放代价（引用自 Tomasulo, IBM J. R&amp;D 11(1):25–33, 1967）</li><li><a href="https://philosophersston.ee/knowledge/why-itanium-failed" target="_blank" rel="noopener">Itanium 失败复盘（Philosopher's Stone）</a> 与 <a href="http://web.eece.maine.edu/~vweaver/papers/iccd09/iccd09_density.pdf" target="_blank" rel="noopener">Weaver, ICCD 2009 的代码密度论文</a> —— 支撑 EPIC 的失败原因清单与 VLIW 代码体积膨胀 3–6 倍（2026 / 2009）</li><li><a href="https://www.anandtech.com/show/1230/3" target="_blank" rel="noopener">AnandTech Prescott 架构分析</a> 与 <a href="https://www.tomshardware.com/reviews/intel,751-5.html" target="_blank" rel="noopener">Tom's Hardware Prescott 评测</a> —— 支撑 NetBurst 流水线由 20 级（Willamette）拉长到 31 级（Prescott）及其后果（2004）</li><li><a href="https://lkml.kernel.org/lkml/20240314055919.1979781-9-irogers@google.com" target="_blank" rel="noopener">Linux perf vendor events: ports metric group（LKML）</a> —— 支撑 <code>UOPS_DISPATCHED.PORT_*</code> / <code>EXE_ACTIVITY.*</code> 的用法与 <code>lpm_ports</code> 度量组定义（2024）</li></ul>
+<hr>
+<h2 id="sec-30">系列导航：处理器微架构深度指南</h2>
+<p>本文是《处理器微架构深度指南》系列之一。</p>
+<p><strong>同系列其他文章</strong>：</p>
+<ul><li><a href="branch-prediction-guide.html">分支预测完全指南：从一次数据重排优化说起</a></li><li><a href="compiler-branch-optimization.html">编译器如何自动优化分支预测</a></li><li><a href="cache-hierarchy-complete-guide.html">缓存层次完全指南：从一次矩阵乘法分块说起</a></li><li><a href="memory-hierarchy-latency-hiding.html">内存层次与延迟隐藏：从指针追逐说起</a></li><li><a href="rob-out-of-order-complete-guide.html">ROB 与乱序执行完全指南：一次瓶颈会诊的完整拆解</a></li><li><a href="frontend-and-instruction-cache.html">前端与指令缓存：为什么过度展开反而更慢</a></li><li><a href="simd-vectorization-complete-guide.html">SIMD 与向量化完全指南：从 SAXPY 到 AVX10 与矩阵扩展</a></li><li><a href="tlb-address-translation-guide.html">TLB 与地址转换：从一次聚集重排说起</a></li></ul>
+<p>所属模块：<a href="../modules/ilp.html">ILP 与流水线</a></p>
+<p class="tags"><span class="tag">ILP</span><span class="tag">流水线</span><span class="tag">超标量</span><span class="tag">寄存器重命名</span><span class="tag">Tomasulo</span><span class="tag">依赖链</span></p>
+<div class="pager">
+  <a href="../reading.html"><span class="k">← 返回</span>扩展阅读</a>
+  <a class="next" href="../modules/ilp.html"><span class="k">所属模块 →</span>ILP 与流水线</a>
+</div>
+</main>
+  <aside class="toc"><h4>本页目录</h4><a href="#sec-2" class="lv2">一、现象：八个累加器为什么跑不满八倍</a><a href="#1-1" class="lv3">1.1 单累加器：一条依赖链就锁死了下界</a><a href="#1-2-k-k" class="lv3">1.2 k 条链：理论 k× 加速和它的三条硬上限</a><a href="#1-3-2-0" class="lv3">1.3 为什么实测还是到不了 2.0</a><a href="#1-4" class="lv3">1.4 超过拐点还会变慢：寄存器压力</a><a href="#1-5-perf" class="lv3">1.5 用 perf 验证而不是猜</a><a href="#sec-8" class="lv2">二、硬件全景：一条指令要过的九道关卡</a><a href="#2-1" class="lv3">2.1 从五级到二十级：为什么深流水线换高频</a><a href="#2-2" class="lv3">2.2 宽度从来不一致：所以要有解耦缓冲</a><a href="#2-3-raw" class="lv3">2.3 寄存器重命名：只有 RAW 是真相关</a><a href="#2-4" class="lv3">2.4 执行端口与调度队列：资源冲突的物理位置</a><a href="#2-5-stage" class="lv3">2.5 数据前递：把写回 stage 提前一级</a><a href="#2-6" class="lv3">2.6 顺序退休：只讲它在流水线里的位置</a><a href="#sec-15" class="lv2">三、演进史：每一步解决了什么问题，又引入了什么代价</a><a href="#3-1-cdc-6600-1964-scoreboard" class="lv3">3.1 CDC 6600（1964）：scoreboard，动态调度的雏形</a><a href="#3-2-ibm-system-360-model-91-1967-tomasulo" class="lv3">3.2 IBM System/360 Model 91（1967）：Tomasulo 算法</a><a href="#3-3" class="lv3">3.3 超标量顺序执行：被假相关卡住的一代</a><a href="#3-4-p6-pentium-pro-1995-rob-tomasulo" class="lv3">3.4 P6 / Pentium Pro（1995）：ROB 把 Tomasulo 的思路做成可量产的通用核心</a><a href="#3-5-prf-based-1990" class="lv3">3.5 现代 PRF-based 设计（1990 年代末至今）</a><a href="#3-6-2024-ooo" class="lv3">3.6 2024 这一代的"分裂":双译码集群与拆分 OoO 引擎</a><a href="#3-7-epic" class="lv3">3.7 被淘汰的两条路：EPIC 和超长流水线</a><a href="#2024-2026" class="lv2">四、真实处理器对比（2024–2026）</a><a href="#4-1" class="lv3">4.1 前端宽度</a><a href="#4-2-apple-8-10-uop-clk-arm" class="lv3">4.2 Apple 为什么能做到 8–10 uop/clk：不只是"ARM 指令规整"</a><a href="#4-3" class="lv3">4.3 后端：端口、寄存器、调度队列</a><a href="#4-4" class="lv3">4.4 同一代的两个答案</a><a href="#sec-28" class="lv2">五、延伸知识点</a><a href="#sec-29" class="lv2">参考来源</a><a href="#sec-30" class="lv2">系列导航：处理器微架构深度指南</a></aside>
+</div>
+<footer>
+  本站为 <a href="https://www.leetcpu.com/">leetcpu.com</a> 课程与题目的中文整理版，
+  仅用于学习交流；题目、代码版权归原站所有。内容由程序从公开页面整理并人工撰写优化报告。
+</footer>
+<script src="../assets/search.js"></script>
+<script src="../assets/app.js"></script>
+</body>
+</html>

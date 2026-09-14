@@ -165,4 +165,25 @@
       });
     });
   }
+
+  /* ---------- 侧边栏交互 ---------- */
+  // 1. 点击分组标题链接直接跳转，不触发 <summary> 折叠
+  document.querySelectorAll(".sidebar .side-title").forEach((link) => {
+    link.addEventListener("click", (e) => {
+      e.stopPropagation();
+    });
+  });
+
+  // 2. 侧边栏折叠手风琴联动：打开一个时自动收起其他
+  document.querySelectorAll(".sidebar details.side-group").forEach((group) => {
+    group.addEventListener("toggle", () => {
+      if (group.open) {
+        document.querySelectorAll(".sidebar details.side-group").forEach((other) => {
+          if (other !== group && other.open) {
+            other.open = false;
+          }
+        });
+      }
+    });
+  });
 })();

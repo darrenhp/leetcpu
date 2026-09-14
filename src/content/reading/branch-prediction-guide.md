@@ -457,3 +457,23 @@ ARM 的 TRM 永远是这样一段话 —— BTB + 方向预测器 + 返回栈 + 
 - ARM Cortex-X4 / Neoverse V1 Technical Reference Manual [citation:1][citation:3]
 - Qualcomm Oryon 分支预测器存储预算分析 [citation:4]
 - *Reverse Engineering the Branch Target Buffer Organizations on Apple M2*, Electronics 2025 [citation:10]
+
+---
+
+## 系列导航：处理器微架构深度指南
+
+本文是《处理器微架构深度指南》系列之一。
+
+**本模块续篇**：[编译器如何自动优化分支预测](compiler-branch-optimization.html) —— 预测器是硬件写死的，但编译器能做的有代码布局、`cmov` 消除、PGO 三层。
+
+**同系列其他文章**：
+
+- [缓存层次完全指南：从一次矩阵乘法分块说起](cache-hierarchy-complete-guide.html)
+- [ILP 与流水线完全指南：从八累加器点积说起](ilp-and-pipeline-complete-guide.html)
+- [内存层次与延迟隐藏：从指针追逐说起](memory-hierarchy-latency-hiding.html)
+- [ROB 与乱序执行完全指南：一次瓶颈会诊的完整拆解](rob-out-of-order-complete-guide.html)
+- [前端与指令缓存：为什么过度展开反而更慢](frontend-and-instruction-cache.html)
+- [SIMD 与向量化完全指南：从 SAXPY 到 AVX10 与矩阵扩展](simd-vectorization-complete-guide.html)
+- [TLB 与地址转换：从一次聚集重排说起](tlb-address-translation-guide.html)
+
+所属模块：[分支预测](../modules/branch.html)

@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>缓存层次完全指南：从一次矩阵乘法分块说起 · LeetCPU 中文站</title>
+<meta name="description" content="从 N=1024 双精度矩阵乘法的工作集推导出发，算出朴素 ijk 为何有 188 MPKI、分块后算术强度如何跨过机器平衡点，再展开组相联位划分、VIPT 别名、RRIP、MESI/MOESI 与四家当代处理器的实测参数。">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232f6feb'/><text x='16' y='23' font-size='19' font-family='monospace' fill='white' text-anchor='middle'>C</text></svg>">
+</head>
+<body data-root="../">
+<header class="topbar">
+  <a class="brand" href="../index.html"><span class="dot">C</span>LeetCPU 中文站</a>
+  <nav class="topnav"><a href="../index.html" class="">概览</a><a href="../modules.html" class="">知识模块</a><a href="../problems.html" class="">全部题目</a><a href="../reading.html" class="on">扩展阅读</a></nav>
+  <div class="searchbox">
+    <input id="q" type="search" placeholder="搜索题目 / 模块 / 文章…" autocomplete="off">
+    <div id="results"></div>
+  </div>
+  <button class="iconbtn" data-theme-toggle title="切换明暗主题">◐</button>
+</header>
+<div class="wrap">
+  <nav class="sidebar"><details class="side-group" name="side-tab">
+  <summary>
+    <span class="side-summary-left">
+      <span class="side-arrow">▶</span>
+      <a href="../index.html" class="side-title ">概览</a>
+    </span>
+  </summary>
+  <div class="side-body">
+    <a href="../index.html" class="">概览首页</a>
+    <a href="../index.html#how">怎么用这个站</a>
+    <a href="../index.html#overview">题目总览</a>
+    <a href="../index.html#modules">知识模块</a>
+    <a href="../index.html#reading">扩展阅读</a>
+  </div>
+</details>
+<details class="side-group" name="side-tab">
+  <summary>
+    <span class="side-summary-left">
+      <span class="side-arrow">▶</span>
+      <a href="../modules.html" class="side-title ">知识模块</a>
+    </span>
+    <span class="side-count">8</span>
+  </summary>
+  <div class="side-body">
+    <a href="../modules.html" class="">模块总览</a>
+    <a href="../modules/branch.html" class="">分支预测</a>
+    <a href="../modules/cache.html" class="">缓存层次</a>
+    <a href="../modules/ilp.html" class="">ILP 与流水线</a>
+    <a href="../modules/memory.html" class="">内存层次与延迟隐藏</a>
+    <a href="../modules/rob.html" class="">ROB 与乱序执行</a>
+    <a href="../modules/frontend.html" class="">前端与指令缓存</a>
+    <a href="../modules/tlb.html" class="">TLB 与地址转换</a>
+    <a href="../modules/simd.html" class="">SIMD 与向量化</a>
+  </div>
+</details>
+<details class="side-group" name="side-tab">
+  <summary>
+    <span class="side-summary-left">
+      <span class="side-arrow">▶</span>
+      <a href="../problems.html" class="side-title ">全部题目</a>
+    </span>
+    <span class="side-count">22</span>
+  </summary>
+  <div class="side-body">
+    <a href="../problems.html" class="">题目总览</a>
+    <div class="side-subhead">分支预测</div>
+    <a href="../problems/stable-partition-branches.html" class=""><span class="num">01</span>稳定划分：让分支变得可预测</a>
+    <a href="../problems/branchless-score-window.html" class=""><span class="num">10</span>区间计分：用无符号技巧消除分支</a>
+    <a href="../problems/masked-saxpy-branchless.html" class=""><span class="num">20</span>掩码 SAXPY：去分支换取吞吐</a>
+    <a href="../problems/lookup-table-grade-bands.html" class=""><span class="num">22</span>等级分档：用查表替代嵌套分支</a>
+    <div class="side-subhead">缓存层次</div>
+    <a href="../problems/matrix-multiply-tiling.html" class=""><span class="num">02</span>矩阵乘法：分块与转置</a>
+    <a href="../problems/particle-struct-repacking.html" class=""><span class="num">08</span>粒子结构体：AoS 转 SoA</a>
+    <a href="../problems/image-blur-tiling.html" class=""><span class="num">09</span>图像模糊：让工作集留在缓存里</a>
+    <a href="../problems/ece-jacobi-stencil-lab.html" class=""><span class="num">11</span>Jacobi 五点 stencil：二维分块</a>
+    <a href="../problems/3d-loop-interchange.html" class=""><span class="num">14</span>三维数组：修正循环顺序</a>
+    <a href="../problems/binary-search-eytzinger.html" class=""><span class="num">15</span>二分查找：Eytzinger 布局 + 预取</a>
+    <a href="../problems/row-major-cache-locality.html" class=""><span class="num">17</span>二维网格求和：修正列优先遍历</a>
+    <div class="side-subhead">ILP 与流水线</div>
+    <a href="../problems/reduction-tree-ilp.html" class=""><span class="num">03</span>规约树：打断依赖链</a>
+    <a href="../problems/bitset-popcount-throughput.html" class=""><span class="num">07</span>位图统计：用 popcount 硬件替代逐位扫描</a>
+    <a href="../problems/histogram-dependency-chains.html" class=""><span class="num">13</span>直方图：打断写依赖链</a>
+    <a href="../problems/streaming-square-sum.html" class=""><span class="num">16</span>流式平方和：多累加器提升 ILP</a>
+    <a href="../problems/saxpy-auto-vectorize.html" class=""><span class="num">18</span>SAXPY：解锁自动向量化</a>
+    <a href="../problems/dot-product-eight-accumulators.html" class=""><span class="num">21</span>点积：八个累加器</a>
+    <div class="side-subhead">内存层次与延迟隐藏</div>
+    <a href="../problems/interleaved-pointer-chasing.html" class=""><span class="num">04</span>指针追逐：恢复内存级并行</a>
+    <a href="../problems/strided-sum-prefetch.html" class=""><span class="num">06</span>跨步求和：用预取隐藏延迟</a>
+    <a href="../problems/irregular-gather-prefetch.html" class=""><span class="num">12</span>不规则聚集：为随机访问提前预取</a>
+    <div class="side-subhead">ROB 与乱序执行</div>
+    <a href="../problems/bottleneck-triage.html" class=""><span class="num">05</span>瓶颈会诊：一次修好三个问题</a>
+    <div class="side-subhead">TLB 与地址转换</div>
+    <a href="../problems/gather-reorder-cache-clustering.html" class=""><span class="num">19</span>聚集重排：按页聚簇访问</a>
+  </div>
+</details>
+<details class="side-group" name="side-tab" open>
+  <summary>
+    <span class="side-summary-left">
+      <span class="side-arrow">▶</span>
+      <a href="../reading.html" class="side-title on">扩展阅读</a>
+    </span>
+    <span class="side-count">9</span>
+  </summary>
+  <div class="side-body">
+    <a href="../reading.html" class="">文章总览</a>
+    <div class="side-subhead">分支预测</div>
+    <a href="../reading/branch-prediction-guide.html" class="" title="分支预测完全指南：从一次数据重排优化说起">分支预测完全指南：从一次数据重排优化说起</a>
+    <a href="../reading/compiler-branch-optimization.html" class="" title="编译器如何自动优化分支预测">编译器如何自动优化分支预测</a>
+    <div class="side-subhead">缓存层次</div>
+    <a href="../reading/cache-hierarchy-complete-guide.html" class="on" title="缓存层次完全指南：从一次矩阵乘法分块说起">缓存层次完全指南：从一次矩阵乘法分块说起</a>
+    <div class="side-subhead">ILP 与流水线</div>
+    <a href="../reading/ilp-and-pipeline-complete-guide.html" class="" title="ILP 与流水线完全指南：从八累加器点积说起">ILP 与流水线完全指南：从八累加器点积说起</a>
+    <div class="side-subhead">内存层次与延迟隐藏</div>
+    <a href="../reading/memory-hierarchy-latency-hiding.html" class="" title="内存层次与延迟隐藏：从指针追逐说起">内存层次与延迟隐藏：从指针追逐说起</a>
+    <div class="side-subhead">ROB 与乱序执行</div>
+    <a href="../reading/rob-out-of-order-complete-guide.html" class="" title="ROB 与乱序执行完全指南：一次瓶颈会诊的完整拆解">ROB 与乱序执行完全指南：一次瓶颈会诊的完整拆解</a>
+    <div class="side-subhead">前端与指令缓存</div>
+    <a href="../reading/frontend-and-instruction-cache.html" class="" title="前端与指令缓存：为什么过度展开反而更慢">前端与指令缓存：为什么过度展开反而更慢</a>
+    <div class="side-subhead">TLB 与地址转换</div>
+    <a href="../reading/tlb-address-translation-guide.html" class="" title="TLB 与地址转换：从一次聚集重排说起">TLB 与地址转换：从一次聚集重排说起</a>
+    <div class="side-subhead">SIMD 与向量化</div>
+    <a href="../reading/simd-vectorization-complete-guide.html" class="" title="SIMD 与向量化完全指南：从 SAXPY 到 AVX10 与矩阵扩展">SIMD 与向量化完全指南：从 SAXPY 到 AVX10 与矩阵扩展</a>
+  </div>
+</details></nav>
+  <main>
+<div class="meta">
+  <span class="badge">扩展阅读</span>
+  <a class="badge mod" style="background:#5b9cf6" href="../modules/cache.html">缓存层次</a>
+  <span class="sub">2026-09-14</span>
+</div>
+<h1 id="sec-1">缓存层次完全指南：从一次矩阵乘法分块说起</h1>
+<blockquote><p>一个问题贯穿全文：为什么"把工作集塞进 L1"是错的？从 N=1024 双精度矩阵乘法的字节数开始算，一路算到组相联的位划分、替换策略的演进、以及 Intel/AMD/ARM/Apple 四家当代核心的真实参数。</p></blockquote>
+<hr>
+<h2 id="n-1024">一、现象与量化案例：N=1024 矩阵乘法的工作集</h2>
+<h3 id="1-1">1.1 题目与参数</h3>
+<p>本站配套题目 <a href="../problems/matrix-multiply-tiling.html">矩阵乘法 — 缓存分块</a> 用的是 <code>N=512</code> 的 <code>float</code>。为了把结论推到更极端的量级，本文把参数放大到 <strong><code>N=1024</code>、<code>double</code>（8 字节）</strong>，行优先存储：</p>
+<div class="codeblock">
+  <div class="codebar"><span class="label">c</span><button class="copybtn">复制</button></div>
+  <pre data-code="#define N 1024
+void matmul(const double *A, const double *B, double *C) {
+    for (int i = 0; i &lt; N; i++)
+        for (int j = 0; j &lt; N; j++) {
+            double s = 0.0;
+            for (int k = 0; k &lt; N; k++)
+                s += A[i*N + k] * B[k*N + j];   // ← 热点
+            C[i*N + j] = s;
+        }
+}"></pre>
+</div>
+<p>先算三个不变量：</p>
+<table><thead><tr><th>量</th><th>计算</th><th>结果</th></tr></thead><tbody><tr><td>单个矩阵大小</td><td>N² × 8B</td><td>8 MiB</td></tr><tr><td>三个矩阵总工作集</td><td>3 × N² × 8B</td><td><strong>24 MiB</strong></td></tr><tr><td>内层 FMA 次数</td><td>N³</td><td>1.074 × 10⁹</td></tr><tr><td>浮点运算总量</td><td>2N³</td><td>2.147 × 10⁹ FLOP</td></tr></tbody></table>
+<p>对照典型当代核心的容量：L1D 32–48 KB（Apple M4 为 128 KB）、L2 1–3 MB、LLC 8–36 MB（AMD X3D 可达 96 MB）。<strong>24 MiB 的工作集在任何一级私有缓存里都装不下</strong>，这一点决定了后面所有的分析。</p>
+<h3 id="1-2-ijk">1.2 朴素 ijk 的访存模式</h3>
+<p>固定 <code>(i, j)</code> 时，内层 <code>k</code> 循环读两个数：</p>
+<ul><li><code>A[i*N + k]</code>：地址步长 8 B，连续。一条 64 B 缓存行装 8 个 <code>double</code>，<strong>行利用率 100%</strong>。</li><li><code>B[k*N + j]</code>：地址步长 <strong>N × 8 = 8192 B = 8 KiB</strong>。每次迭代都跳到一条新行，而这条行里只用 8/64 = <strong>12.5%</strong>。</li></ul>
+<p>8 KiB 这个步长不只是"跨行"，它还有一个更致命的性质——<strong>它是 2 的幂</strong>。设 L1D 为 32 KB、8 路、64 B 行，则行内偏移 6 bit、组索引 6 bit（64 组）。<code>B[k*N+j]</code> 的字节偏移是 <code>k × 8192 + j × 8</code>，而 <code>k × 8192</code> 的 bit 0–12 全为 0，于是<strong>索引位完全由 <code>j</code> 决定：同一列的 1024 个元素全部映射到同一个组</strong>。8 路 LRU 装不下 1024 个不同行，复用率为零。</p>
+<p>这个结论对当代所有 L1D 都成立，不只是 32 KB 那一档：</p>
+<table><thead><tr><th>L1D 配置</th><th>组数</th><th>索引位</th><th>一列 1024 个元素落在几组</th><th>每组元素数 vs 路数</th></tr></thead><tbody><tr><td>32 KB / 8 路 / 64B（Zen 4）</td><td>64</td><td>[6:11]</td><td>1 组</td><td>1024 vs 8 → 必冲突</td></tr><tr><td>48 KB / 12 路 / 64B（Zen 5、Golden Cove）</td><td>64</td><td>[6:11]</td><td>1 组</td><td>1024 vs 12 → 必冲突</td></tr><tr><td>64 KB / 4 路 / 64B（Neoverse V2/V3）</td><td>256</td><td>[6:13]</td><td>2 组</td><td>512 vs 4 → 必冲突</td></tr><tr><td>128 KB / 8 路 / 64B（Apple M4）</td><td>256</td><td>[6:13]</td><td>2 组</td><td>512 vs 8 → 必冲突</td></tr></tbody></table>
+<h3 id="1-3-mpki">1.3 失效次数、MPKI 与命中率</h3>
+<p>按"无跨迭代复用"的最坏情况估算（1.2 节已证明这是成立的）：</p>
+<table><thead><tr><th>来源</th><th>失效行数</th><th>说明</th></tr></thead><tbody><tr><td>B 的列访问</td><td>N³ = 1.074 × 10⁹</td><td>每个 <code>B[k][j]</code> 一条新行</td></tr><tr><td>A 的行访问</td><td>128 × N² = 1.342 × 10⁸</td><td>每个内积重取 A 的一行（8 KB = 128 行），被 B 流冲掉</td></tr><tr><td>C 的写分配</td><td>N²/8 = 1.31 × 10⁵</td><td>8 个连续 <code>j</code> 共享一行</td></tr><tr><td><strong>合计</strong></td><td><strong>≈ 1.208 × 10⁹</strong></td><td></td></tr></tbody></table>
+<p>取内层迭代约 6 条指令，总指令数 ≈ 6.44 × 10⁹ = 6.44 × 10⁶ 千条指令：</p>
+<ul><li><strong>L1D MPKI ≈ 1.208 × 10⁹ / 6.44 × 10⁶ ≈ 188</strong></li><li>L2→L1 重填流量 = 1.208 × 10⁹ × 64 B ≈ <strong>77.3 GB</strong></li><li>但落到 <strong>DRAM</strong> 的只有 3 × (8 MiB / 64 B) = 393,216 行 ≈ <strong>24 MiB</strong>（前提是 LLC 装得下这三块 8 MiB）</li><li><strong>LLC MPKI ≈ 0.061，LLC 命中率 ≈ 99.97%</strong></li></ul>
+<blockquote><p><strong>这一组数字是本文最反直觉的地方</strong>：朴素 ijk 的 LLC 命中率高达 99.97%，看上去"缓存工作得很好"，但它慢得离谱。因为瓶颈根本不在 DRAM，而在 <strong>L2→L1 这条重填通道的带宽与 L2 命中延迟</strong>。只看 LLC 命中率会得出完全错误的诊断。</p></blockquote>
+<h3 id="1-4">1.4 分块：工作集与算术强度</h3>
+<p>按 <code>T × T × T</code> 分块后，任一时刻的活跃工作集是 3 个 <code>T²</code> 块：</p>
+<table><thead><tr><th>T</th><th>工作集 3T²×8B</th><th>落在哪一级</th><th>L2→L1 流量 24N³/T</th><th>算术强度 AI = T/12 FLOP/B</th></tr></thead><tbody><tr><td>32</td><td>24 KiB</td><td>48 KB L1D 可装但余量只剩一半；32 KB L1D 只剩 8 KB 余量，几乎不可用</td><td>805 MB</td><td>2.67</td></tr><tr><td>64</td><td>96 KiB</td><td>L1D 全部装不下 → <strong>L2</strong></td><td>403 MB</td><td>5.33</td></tr><tr><td>128</td><td>384 KiB</td><td>L2（1–3 MB）</td><td>201 MB</td><td>10.67</td></tr><tr><td>256</td><td>1.5 MiB</td><td>超出 1 MB L2</td><td>100 MB</td><td>21.3</td></tr><tr><td>朴素 ijk</td><td>24 MiB</td><td>远超所有私有缓存</td><td>77.3 GB</td><td>0.028</td></tr></tbody></table>
+<h3 id="1-5-roofline-l2">1.5 Roofline：为什么分块到 L2 就够了</h3>
+<p>给出一个显式建模假设（便于读者替换成自己机器的数字）：核心每周期 16 个 double FMA（两条 512-bit FMA 流水线 × 8 lane），主频 5 GHz，L1 重填接口 64 B/clk。</p>
+<ul><li>峰值算力 = 16 × 2 × 5 × 10⁹ = <strong>160 GFLOP/s</strong> → 纯计算时间 = 2.147 × 10⁹ / 1.6 × 10¹¹ = <strong>13.4 ms</strong></li><li>L1 重填带宽 = 64 B × 5 GHz = <strong>320 GB/s</strong></li><li><strong>机器平衡点 = 160 / 320 = 0.5 FLOP/B</strong></li></ul>
+<p>把 1.4 节的 AI 画上去：</p>
+<table><thead><tr><th>版本</th><th>AI（FLOP/B）</th><th>与 0.5 比较</th><th>访存时间</th><th>结论</th></tr></thead><tbody><tr><td>朴素 ijk</td><td>0.028</td><td>远低于</td><td>77.3 GB / 320 GB/s = <strong>242 ms</strong></td><td>带宽受限，比计算慢 <strong>18×</strong></td></tr><tr><td>T=32</td><td>2.67</td><td>高于</td><td>2.5 ms</td><td>已计算受限</td></tr><tr><td>T=64</td><td>5.33</td><td>高于</td><td>1.26 ms</td><td>已计算受限</td></tr><tr><td>T=128</td><td>10.67</td><td>高于</td><td>0.63 ms</td><td>已计算受限</td></tr></tbody></table>
+<p><strong>结论：AI 一旦跨过 0.5 这个机器平衡点（T ≈ 32 就跨过了），再把 T 加大只是在减少本来就不构成瓶颈的流量，拿不到任何加速。</strong> 这就是"分块尺寸必须让工作集装进 L2 而不是 L1"的真正含义——不是"L2 比 L1 更强"，而是：</p>
+<ol><li>装进 L2 就<strong>已经足够</strong>把程序推到计算受限区；</li><li>硬往 L1 挤（T=32，24 KiB）在 32 KB L1D 上只剩 8 KB 余量、在 48 KB L1D 上也只剩一半，还要跟硬件预取器抓进来的相邻行、栈、其他数据抢空间，极易抖动；</li><li>T=64（96 KiB）稳稳落在 L2，代价只是每次命中多付十几个 cycle（L1D 约 4 cycle，L2 实测约 14 cycle（Zen 4）/ 17 cycle（Lion Cove）），而这点延迟在乱序 + SIMD 下被大量在途失效掩盖了。</li></ol>
+<p>Intel 官方优化手册对服务器端的建议与这个推导一致——原文是："Consider blocking to L2 on Skylake Server microarchitecture if L2 can sustain the application's bandwidth requirements."（<a href="https://cdrdv2-public.intel.com/779559/355308-Software-Optimization-Manual-047-Changes-Doc.pdf" target="_blank" rel="noopener">Intel 64 and IA-32 Architectures Optimization Reference Manual</a>，2019）</p>
+<h3 id="1-6-vs">1.6 换循环序 vs 分块：两件事，收益差一个数量级</h3>
+<p>一个常见的误解是"转置/换序就够了"。把循环改成 <code>ikj</code> 后，内层 <code>j</code> 循环里 <code>B[k][j]</code> 与 <code>C[i][j]</code> 都是单位步长：</p>
+<div class="codeblock">
+  <div class="codebar"><span class="label">c</span><button class="copybtn">复制</button></div>
+  <pre data-code="for (int i = 0; i &lt; N; i++)
+    for (int k = 0; k &lt; N; k++) {
+        double a = A[i*N + k];
+        for (int j = 0; j &lt; N; j++)
+            C[i*N + j] += a * B[k*N + j];   // B 行、C 行都是顺序访问
+    }"></pre>
+</div>
+<p>此时 <code>C</code> 的一行（8 KB）在整个 <code>k</code> 循环里常驻 L1D（与当前 <code>B</code> 行共 16 KB，32 KB L1D 装得下），只在换 <code>i</code> 时重取一次。但 <code>B</code> 仍然是<strong>每个 <code>i</code> 被完整扫一遍</strong>：单个 <code>i</code> 就要取 1024 × 128 = 131,072 条行 = 8 MB，1024 个 <code>i</code> 合计 <strong>1.342 × 10⁸ 次失效</strong>。</p>
+<table><thead><tr><th>版本</th><th>L1D 失效次数</th><th>L2→L1 流量</th><th>MPKI</th><th>带宽口径耗时（320 GB/s）</th><th>是否计算受限（13.4 ms）</th></tr></thead><tbody><tr><td>朴素 <code>ijk</code></td><td>1.208 × 10⁹</td><td>77.3 GB</td><td>188</td><td>242 ms</td><td>否，慢 18×</td></tr><tr><td>只换 <code>ikj</code></td><td>1.34 × 10⁸</td><td>8.6 GB</td><td>21</td><td>26.8 ms</td><td>否，仍慢 2×</td></tr><tr><td><code>ikj</code> + 分块 T=64</td><td>6.3 × 10⁶</td><td>403 MB</td><td>≈1</td><td>1.26 ms</td><td>是</td></tr></tbody></table>
+<p>换循环序把行利用率从 12.5% 拉回 100%，一次拿到 <strong>9 倍</strong>；分块解决的是另一个问题——<strong>让 <code>B</code> 的每一行被 64 个不同的 <code>i</code> 复用</strong>——再拿到 <strong>21 倍</strong>。两者正交，缺一不可，这正好对应本站题目"先转置、再分块"的两步解法。</p>
+<hr>
+<h2 id="sec-9">二、硬件全景：从地址切分到一致性</h2>
+<h3 id="2-1">2.1 层级与分工</h3>
+<p>取指 → 译码 → 执行 → 访存 → retire 这条链路上，缓存插入的位置是：<strong>L1I 喂取指、L1D 接访存，L2 兜住二者的失效，LLC 兜住 L2 的失效并充当一致性归结点。</strong></p>
+<ul><li><strong>L1I / L1D 分离</strong>（哈佛式前端）：指令流只读、可容忍更高的失效延迟，数据流要读写且参与一致性，拆开后两者互不干扰。</li><li><strong>L2 私有并统一指令与数据</strong>：Intel/AMD/ARM 的当代大核都如此。</li><li><strong>LLC 共享</strong>：x86 上通常是 L3，被同 die / 同 CCX / 同 ring 上的所有核共享。</li></ul>
+<p>例外值得单独记一笔：</p>
+<ul><li><strong>Apple 没有传统 L3</strong>。以 M4 为例（数据来自 <a href="https://jia.je/hardware/2025/05/21/apple-m4/" target="_blank" rel="noopener">Apple Silicon CPU Optimization Guide，经第三方整理</a>）：4 个 P 核共享 16 MiB L2（16 路，128 B 行），E 核簇共享 4 MiB L2（16 路，128 B 行）；再往上是全 SoC 共享的 <strong>Memory Cache（即 SLC）</strong>，M1/M2/M3/M4 标准版为 8 MiB、16 路、128 B 行。它同时服务 GPU、NPU、媒体引擎，更接近"内存侧缓存"而非"CPU 的 L3"。</li><li><strong>L4 / 内存侧缓存</strong>：Intel 曾在 Haswell / Broadwell 的 Iris Pro 型号上挂过 128 MB eDRAM，官方称之为 Level 4 cache（代号 Crystal Well，CPU 与 GPU 共享，见 <a href="https://www.techspot.com/review/1028-intel-core-i7-5775c-broadwell/" target="_blank" rel="noopener">TechSpot i7-5775C 评测参数表</a>，2015）。这条路线后来没有延续。</li></ul>
+<h3 id="2-2">2.2 组相联与地址位划分</h3>
+<p>一条 64 B 行需要 6 bit 行内偏移。32 KB / 8 路的 L1D 有 512 行、64 组 → 组索引 6 bit，剩下的是 tag。命中判定 = 用索引挑组，再用 tag 并行比对该组的 8 个路。</p>
+<p><strong>为什么 index 用虚拟地址低位、tag 用物理地址？</strong> 因为 TLB 查表可以和缓存取行并行做——先拿虚拟地址低位去读数据阵列和 tag 阵列，等物理地址出来再比 tag，省掉整整一次 TLB 延迟，这就是 VIPT。</p>
+<p>代价是 <strong>别名（synonym）问题</strong>：</p>
+<ul><li><strong>homonym（同名）</strong>：同一虚拟地址在不同进程映射到不同物理地址。物理 tag 天然解决。</li><li><strong>synonym（同义）</strong>：不同虚拟地址映射到同一物理地址。物理 tag 解决不了——同一个物理行可能被缓存在多个组里，写一处不会反映到另一处。</li></ul>
+<p>工程上的规避办法是让索引位全部落在<strong>页内偏移</strong>之内（4 KB 页 → 页内 12 bit，减去 6 bit 行内偏移，只剩 6 bit 索引 = 64 组）。于是 VIPT 缓存的容量上限 = <strong>页大小 × 路数</strong>：</p>
+<table><thead><tr><th>配置</th><th>页大小</th><th>索引位</th><th>组数</th><th>容量上限 = 页 × 路数</th></tr></thead><tbody><tr><td>x86，4 KB 页，8 路</td><td>4 KB</td><td>6</td><td>64</td><td>32 KB</td></tr><tr><td>x86，4 KB 页，12 路</td><td>4 KB</td><td>6</td><td>64</td><td>48 KB</td></tr><tr><td>Apple M4，16 KB 页，8 路</td><td>16 KB</td><td>8</td><td>256</td><td><strong>128 KB</strong></td></tr></tbody></table>
+<p>最后一行解释了为什么只有 Apple 能把 L1D 做到 128 KB：它用的是 16 KB 页（<a href="https://jia.je/hardware/2025/05/21/apple-m4/" target="_blank" rel="noopener">Apple Silicon CPU Optimization Guide</a>，M4 P 核 L1D 官方标称为 128 KiB / 8 路 / 64 B 行）。</p>
+<p>被淘汰的做法是 <strong>page coloring</strong>（操作系统保证虚拟别名不共存），早期 SPARC / RS/6000 用过，现在没人用了——硬件检测并驱逐别名的成本已经降下来，而软件维持完美着色的复杂度和性能损失太高（<a href="https://en.wikipedia.org/wiki/CPU_cache" target="_blank" rel="noopener">Wikipedia: CPU cache</a>）。L2 及以上几乎全是 PIPT，因为容量一大，虚拟索引的收益抵不上别名代价。</p>
+<h3 id="2-3-lru-rrip">2.3 替换策略：从 LRU 到 RRIP</h3>
+<p>真 LRU 在 8 路、12 路、16 路上要维护全序，元数据与比较逻辑成本过高，所以实际用的是近似：</p>
+<ul><li><strong>NRU / Pseudo-LRU</strong>：每块 1 bit，命中清零，全 1 时整体翻转（或树形 bit 指向受害者）。</li><li><strong>RRIP（Re-Reference Interval Prediction）</strong>：每块 2 bit 的 RRPV，插入时预测"很久以后才会再访问"，命中时把 RRPV 降到 0，驱逐 RRPV 最大的块。扫描型负载插入即 3，很快被换出，不会把活跃工作集冲掉（<a href="https://csg.csail.mit.edu/6.S078/6_S078_2012_www/handouts/isca2010-rrip.pdf" target="_blank" rel="noopener">Jaleel et al., ISCA 2010</a>）。</li></ul>
+<h3 id="2-4-mesi-moesi">2.4 一致性：MESI、MOESI 与伪共享</h3>
+<p>MESI 的四态里，若 Core 0 持有一条 <strong>Modified</strong> 行而 Core 1 要读它，必须先写回内存再由 Core 1 读——一次写回 + 一次读。</p>
+<p><strong>MOESI 增加 Owned 态</strong>（<a href="https://en.wikipedia.org/wiki/MOESI_protocol" target="_blank" rel="noopener">AMD64 Architecture Programmer's Manual Vol.2 描述的协议，见 Wikipedia: MOESI</a>）：Core 0 从 M 转 O，<strong>直接把脏数据交给 Core 1</strong>，内存里的旧副本保持陈旧，由 O 态的持有者负责将来写回。省掉的是"写回内存 + 从内存读"这两步，换来的是协议状态机更复杂，且必须保证共享者中恰好一个响应 snoop。Intel 走的是另一条路：<strong>MESIF</strong>，增加 Forward 态，指定唯一的干净响应者，避免多个 S 态同时回应的"惊群"。</p>
+<p><strong>伪共享（false sharing）</strong> 是这套机制最常见的副作用：两个核写同一条行内的不同变量，行在 M/I 之间来回迁移。第三方实测（<a href="https://unseel.com/cs/false-sharing" target="_blank" rel="noopener">unseel.com，Cascade Lake</a>）：16 线程无填充时 12 M 次/秒，按 64 B 对齐填充后 <strong>1400 M 次/秒</strong>，相差两个数量级。</p>
+<h3 id="2-5-l1d">2.5 写策略，以及 L1D 真正稀缺的三种资源</h3>
+<p>现代数据缓存几乎一律是<strong>写回（write-back）+ 写分配（write-allocate）</strong>：store 只改缓存并置脏，等行被驱逐时才写回；store 未命中时先把整行取进来再写。写直达（write-through）只留在 L1I 和部分嵌入式设计里——它对只读的指令流无所谓，对数据流则会把每次 store 都变成一次下游写事务。</p>
+<p>写回的代价是<strong>失效不总是免费的</strong>：驱逐一个脏行要在同一条通道上多排一次写回，和填充请求争用带宽。这也是为什么在带宽吃紧的负载里，减少失效次数比缩短单次失效延迟更值钱。</p>
+<p>L1D 上真正稀缺的其实是三种<strong>有限条目</strong>资源，它们互相争用：</p>
+<ul><li><strong>填充缓冲 / MSHR</strong>：跟踪在途的 L1D 失效，决定了能同时有多少个失效在飞（即 MLP 上限）。</li><li><strong>写回缓冲</strong>：暂存被驱逐的脏行。</li><li><strong>snoop / 一致性端口</strong>：处理别核发来的探测请求（见 2.4 节）。</li></ul>
+<p>MSHR 与填充缓冲的数量厂商基本不公开，只能靠第三方实测反推：Haswell 的 L1 约 10 个 MSHR，Pentium 4 约 8 个，Cortex-A72 约 6 个（<a href="https://commit.csail.mit.edu/papers/2019/vkiriansky19phd.pdf" target="_blank" rel="noopener">Kiriansky, MIT 博士论文, 2019</a>；<a href="https://commit.csail.mit.edu/papers/2018/kiriansky-pact18-cimple.pdf" target="_blank" rel="noopener">Cimple, PACT 2018</a>）——<strong>均为第三方实测/逆向估计，非官方数字</strong>。这部分与本站「内存层次与延迟隐藏」模块交叉，那里会展开 MLP 与延迟隐藏。</p>
+<h3 id="2-6-inclusive-non-inclusive-exclusive">2.6 包含策略：inclusive / non-inclusive / exclusive</h3>
+<table><thead><tr><th>策略</th><th>含义</th><th>一致性代价</th><th>有效容量</th></tr></thead><tbody><tr><td>Inclusive</td><td>L2 的内容必在 L3</td><td>L3 目录即可判定全片有无，snoop 只需查 L3 tag</td><td>= L3</td></tr><tr><td>Non-inclusive</td><td>L2 内容<strong>可能</strong>在 L3</td><td>需要额外的 snoop filter / 目录</td><td>≈ L2 + L3</td></tr><tr><td>Exclusive</td><td>L2 内容<strong>必不</strong>在 L3</td><td>同 non-inclusive</td><td>= L2 + L3</td></tr></tbody></table>
+<p>Intel 从 <strong>Skylake-Server</strong> 起把 L3 转为 non-inclusive（<a href="https://cdrdv2-public.intel.com/779559/355308-Software-Optimization-Manual-047-Changes-Doc.pdf" target="_blank" rel="noopener">Intel Optimization Reference Manual §2.5.1.2</a>），同时把 L2 从 256 KB 放大到 1 MB。动机与后果都很清楚：</p>
+<ul><li><strong>动机</strong>：inclusive L3 里有一整份 L2 副本是纯浪费。转 non-inclusive 后有效容量从 1.375 MB/核 变成 L2 + L3 ≈ 2.375 MB/核。</li><li><strong>后果</strong>：L3 未命中不再意味着"片上一定没有"，必须靠分布式 snoop filter 追踪各核 L1/L2 的内容（<a href="https://en.wikichip.org/w/index.php?title=intel/microarchitectures/skylake_(server)&amp;oldid=76794&amp;diff=prev" target="_blank" rel="noopener">WikiChip: Skylake server</a>，Skylake-SP snoop filter 为 2048 组 × 12 路）。手册原话是：程序若要在运行时估计每核有效缓存容量，应把 mid-level 与 last-level <strong>相加</strong>。</li></ul>
+<p>AMD 的公开描述与此一致：Hot Chips 2024 的 Zen 5 材料写明 "L3 is filled from L2 victims"、"L2 tags duplicated in L3 for probe filtering and fast cache transfer"（<a href="https://hc2024.hotchips.org/assets/program/conference/day2/24_HC2024.AMD.Cohen.Subramony.final.pdf" target="_blank" rel="noopener">AMD, Hot Chips 2024</a>）——即 L3 是受害者缓存 + 目录，属于非包含式。</p>
+<hr>
+<h2 id="sec-16">三、演进史：每一步解决了什么、代价是什么</h2>
+<h3 id="3-1">3.1 直接映射 → 组相联 → 路数增长的边际递减</h3>
+<ul><li><strong>直接映射</strong>：命中路径最短（一次取行、一次比较），但两个恰好映射到同一槽的热变量会<strong>每次访问互相驱逐</strong>（抖动/冲突失效）。</li><li><strong>组相联</strong>：给了 N 个候选槽，冲突失效显著下降。代价是 N 个 tag 比较器并行工作、N 路数据 mux、功耗与面积上升，命中时间变长。</li><li><strong>路数继续增长</strong>：从 2 路到 4 路收益很大，8 路到 16 路收益已经很薄，这也是为什么 L1D 长期停在 8–12 路，而 LLC 才用 12–16 路（LLC 更怕冲突失效，且延迟预算宽松）。</li></ul>
+<h3 id="3-2-lru-pseudo-lru-rrip">3.2 替换策略：LRU → Pseudo-LRU → RRIP</h3>
+<p>每一步都在解决"上一个策略对某类访问模式的系统性误判"：</p>
+<ol><li><strong>LRU</strong>：假设"最近用过 = 很快再用"。工作集大于缓存时（thrashing），这个假设彻底失效——LRU 退化成随机驱逐。</li><li><strong>DIP / LIP</strong>（ISCA 2007）：改成"新来的很可能很久以后才用"，保留部分工作集。代价是<strong>对所有访存用同一个预测</strong>，遇到"扫描 + 活跃工作集"混合模式就不灵了。</li><li><strong>RRIP</strong>（ISCA 2010）：给每块一个 2-bit 的重引用间隔预测，混合模式也能区分。论文的实测数据（<a href="https://csg.csail.mit.edu/6.S078/6_S078_2012_www/handouts/isca2010-rrip.pdf" target="_blank" rel="noopener">Jaleel et al., ISCA 2010</a>，单核 2 MB LLC / 4 核 8 MB LLC）：</li></ol>
+<table><thead><tr><th>指标</th><th>SRRIP</th><th>DRRIP / TA-DRRIP</th></tr></thead><tbody><tr><td>单核吞吐平均提升（vs LRU）</td><td><strong>4%</strong></td><td><strong>10%</strong></td></tr><tr><td>4 核 CMP 吞吐平均提升</td><td><strong>7%</strong>（最高 25%）</td><td><strong>10%</strong>（最高 2.1×）</td></tr><tr><td>MPKI 下降幅度</td><td>5–15%（14 个负载中的 8 个）</td><td>—</td></tr><tr><td>不同 LLC 容量（512 KB–8 MB）下的表现</td><td>优于 LRU <strong>5–20%</strong></td><td>—</td></tr><tr><td>硬件开销</td><td>每块 2 bit，比 LRU 少 <strong>2×</strong>，比 LFU 少 <strong>2.5×</strong></td><td>同</td></tr></tbody></table>
+<p>论文里两个容易被忽略、但很关键的负结果：</p>
+<ul><li><strong>RRIP 在 L1 上没有任何收益</strong>（缓存太小、时间局部性太高），在 256 KB 的 L2 上收益也不显著。它只对 <strong>LLC</strong> 有效——因为上游小缓存已经把强局部性的访问过滤掉了，到达 LLC 的才是需要预测的那部分。</li><li>TA-DRRIP 在 1001 个多道负载里有 <strong>不到 25 个</strong>出现 2–5% 的性能下降，代价来自 set dueling 的试错开销。</li></ul>
+<p>后续还有 <strong>SHiP</strong>（用签名/PC 预测死块）等基于采样的策略，思路一致：把"驱逐谁"从启发式变成预测问题。</p>
+<h3 id="3-3">3.3 预取器出现之后，"命中率"这个指标开始失真</h3>
+<p>预取器会把大量<strong>从未被真正使用</strong>的行塞进缓存，于是"命中率上升"不再等价于"程序变快"。评价预取要同时看三个维度（<a href="https://en.wikipedia.org/wiki/Cache_prefetching" target="_blank" rel="noopener">Wikipedia: Cache prefetching</a> 与 <a href="https://hps.ece.utexas.edu/pub/srinath_hpca07.pdf" target="_blank" rel="noopener">Srinath et al., HPCA 2007</a>）：</p>
+<ul><li><strong>Coverage</strong>：被预取消除的原始失效占比。</li><li><strong>Accuracy</strong>：发出的预取中真正被用到的比例。</li><li><strong>Timeliness</strong>：行到得够不够早——太晚仍要停顿，太早可能在被用之前就被换出。</li></ul>
+<p>HPCA 2007 的实测给出了两个分界点：</p>
+<ul><li>在 <code>applu</code>、<code>galgel</code>、<code>ammp</code> 上预取<strong>准确率低于 40%</strong>，开流预取器<strong>总是比不开更慢</strong>；准确率超过 40% 的负载则普遍明显变快。</li><li><code>mcf</code> 的准确率接近 100%，但<strong>超过 90% 的有效预取都到得太晚</strong>，所以几乎没有收益。</li></ul>
+<p>预取器的细节属于本站 <a href="../reading/memory-hierarchy-latency-hiding.html">内存层次与延迟隐藏</a> 篇的范畴，这里不展开。</p>
+<h3 id="3-4">3.4 被淘汰的思路</h3>
+<ul><li><strong>全相联内容寻址（CAM）</strong>：命中率最优，但每次查找要与所有行的 tag 并行比较，功耗和面积随容量线性爆炸，只在极小容量（TLB、部分 uop cache）上用。</li><li><strong>纯软件管理的 scratchpad / 显式 SPM</strong>：把 SRAM 暴露成可直接寻址的本地内存，由编译器或程序员显式搬运。它在 DSP、GPU 共享内存、Cell SPE 上是主流，但<strong>没能在通用 CPU 上普及</strong>——代价是要求软件显式管理数据布局、破坏二进制兼容、且对不可静态分析的访问模式无能为力。缓存的"对软件透明"这一性质，在通用计算场景里价值高于那点面积和功耗。（这一段属于体系结构界的共识性判断，本文未找到可引用的单一权威一手来源。）</li><li><strong>eDRAM L4</strong>（Crystal Well 128 MB）：带宽与容量都好看，但成本高、与主流的核显/独显配置耦合，2015 年之后没有延续（<a href="https://www.techspot.com/review/1028-intel-core-i7-5775c-broadwell/" target="_blank" rel="noopener">TechSpot, 2015</a>）。</li></ul>
+<hr>
+<h2 id="2024-2026">四、真实处理器对比（2024–2026）</h2>
+<blockquote><p>表中所有数字都标注来源。<strong>厂商未公开、只能靠第三方逆向或实测得到的数字已显式标为"第三方实测"。</strong></p></blockquote>
+<h3 id="4-1">4.1 参数总表</h3>
+<table><thead><tr><th>维度</th><th>Intel（Lion Cove / Redwood Cove）</th><th>AMD（Zen 5 / Zen 4）</th><th>ARM（Neoverse V2 / V3）</th><th>Apple（M4 / M3）</th></tr></thead><tbody><tr><td>L1D 容量 / 路数</td><td>48 KB / 12 路（Intel 称 L0D）</td><td>Zen 5：48 KB / 12 路；Zen 4：32 KB / 8 路</td><td>64 KB / 4 路</td><td>128 KB / 8 路（M3/M4 P 核相同）</td></tr><tr><td>L1D 延迟</td><td>4 cycle（Lion Cove），5 cycle（Redwood Cove）</td><td>4 cycle（第三方实测）</td><td>4 cycle（第三方实测，最低值）</td><td>3 cycle（官方优化指南，pointer-chasing）</td></tr><tr><td>L2 容量</td><td>2.5 MB（Lunar Lake）/ 3 MB（Arrow Lake）</td><td>1 MB（Zen 4/Zen 5 相同）</td><td>V2：1 或 2 MB；V3：2 MB 或 3 MB</td><td>16 MB / P 簇（4 核共享），4 MB / E 簇</td></tr><tr><td>L2 延迟</td><td>17 cycle（Lion Cove），16 cycle（Redwood Cove）</td><td>14 cycle（Zen 4，第三方实测）；Zen 5 未找到官方数据</td><td>V2：10 cycle（ARM 标称）/ 11 cycle（第三方实测）；V3：10 cycle（2 MB）或 12 cycle（3 MB）</td><td>未找到官方数据；第三方 pointer-chasing 在 14–16 cycle 量级</td></tr><tr><td>L2 带宽</td><td>32 B/clk（Lion Cove 实测上限）</td><td><strong>Zen 4：32 B/clk → Zen 5：64 B/clk（翻倍）</strong></td><td>128 B/clk（ARM Hot Chips 标称），实测线性读仅约 32 B/clk</td><td>未找到官方数据</td></tr><tr><td>LLC / SLC</td><td>36 MB（Arrow Lake 全片共享）；12 MB（Lunar Lake，仅 P 核）</td><td>32 MB / CCD，16 路；X3D 型号 96 MB</td><td>由 SoC 决定（Graviton4 为 36 MB；V3 官方未定）</td><td>SLC（Memory Cache）8 MB / 16 路 / 128 B 行</td></tr><tr><td>LLC 延迟</td><td>51 cycle（Lunar Lake）/ 84 cycle（Arrow Lake，ring 更长）</td><td>未找到官方数据；Zen 5 比 Zen 4 低 3.5 cycle</td><td>68 cycle（Graviton4，第三方实测）</td><td>未找到官方数据；第三方约 50 cycle 量级</td></tr><tr><td>行大小</td><td>64 B</td><td>64 B</td><td>64 B</td><td><strong>L1D/L1I 为 64 B，L2 与 SLC 为 128 B</strong></td></tr><tr><td>中间层</td><td>Lion Cove 增加 192 KB "L1"（9 cycle），形成 L0/L1/L2 三级</td><td>无</td><td>无</td><td>无（L2 即簇内末级）</td></tr><tr><td>包含策略</td><td>客户端未找到官方数据；服务器端自 Skylake-SP 起 non-inclusive</td><td>L3 由 L2 victim 填充 + L2 tag 复制做目录 → 非包含式</td><td>未找到官方数据</td><td>未找到官方数据</td></tr><tr><td>L4 / 内存侧缓存</td><td>无（Crystal Well 已停产）</td><td>无</td><td>视 SoC 而定</td><td>SLC 由 CPU/GPU/NPU/媒体引擎共享，接近内存侧缓存</td></tr></tbody></table>
+<p>主要来源：<a href="https://chipsandcheese.com/p/lion-cove-intels-p-core-roars" target="_blank" rel="noopener">Chips and Cheese: Lion Cove</a>（2024，第三方实测）；<a href="https://hc2024.hotchips.org/assets/program/conference/day2/24_HC2024.AMD.Cohen.Subramony.final.pdf" target="_blank" rel="noopener">AMD Hot Chips 2024 "Zen 5" 演讲页</a>（官方）；<a href="https://en.wikipedia.org/wiki/Zen_5" target="_blank" rel="noopener">Wikipedia: Zen 5</a>（2024）；<a href="https://developer.arm.com/compute-ip/neoverse-v3" target="_blank" rel="noopener">ARM Neoverse V3 官方规格页</a>（官方）；<a href="https://old.chipsandcheese.com/2024/07/22/arms-neoverse-v2-in-awss-graviton-4/" target="_blank" rel="noopener">Chips and Cheese: Neoverse V2 in Graviton 4</a>（2024，第三方实测）；<a href="https://jia.je/hardware/2025/05/21/apple-m4/" target="_blank" rel="noopener">Apple Silicon CPU Optimization Guide 整理（jia.je）</a>（2025）；<a href="https://www.techpowerup.com/review/intel-core-ultra-9-285k/3.html" target="_blank" rel="noopener">TechPowerUp: Core Ultra 9 285K</a>（2024）。</p>
+<h3 id="4-2-zen-5">4.2 Zen 5 的当代变化：容量不动，带宽翻倍</h3>
+<p>Zen 5 相对 Zen 4 在缓存上的改动可以一句话概括：<strong>L2 容量仍是 1 MB，但路数 8 → 16、带宽 32 B/clk → 64 B/clk，L3 延迟降低 3.5 cycle，L1D 从 32 KB / 8 路扩到 48 KB / 12 路</strong>（<a href="https://hc2024.hotchips.org/assets/program/conference/day2/24_HC2024.AMD.Cohen.Subramony.final.pdf" target="_blank" rel="noopener">AMD Hot Chips 2024</a>）。这是"先补带宽再补容量"的典型取舍——前几代 L2 已经从 256 KB 涨到 1 MB，继续涨容量的收益不如把数据更快地搬到执行单元。</p>
+<h3 id="4-3-3d-v-cache">4.3 3D V-Cache：哪些负载收益大，哪些几乎没收益</h3>
+<p>AMD 的 3D V-Cache 把一片 64 MB SRAM 堆在 CCD 上。Zen 3 的 CCD 原生就有 32 MB L3，叠加后 <strong>96 MB</strong>（<a href="https://www.techinsights.com/blog/amd-ships-3d-v-cache-processors" target="_blank" rel="noopener">TechInsights, 2022</a>）；Zen 5 的 9800X3D 改把缓存放在核心<strong>下方</strong>，改善了散热，基频比 7800X3D 高 500 MHz 并首次允许超频（<a href="https://en.wikipedia.org/wiki/Zen_5" target="_blank" rel="noopener">Wikipedia: Zen 5</a>，2024）。</p>
+<p>关键在于收益的<strong>极度不均衡</strong>：</p>
+<p><strong>收益大的</strong>：工作集落在"原生 L3 装不下、96 MB 装得下"这个窗口里的负载。</p>
+<ul><li>游戏（Windows，1080p）：5800X3D 相对非 X3D 同款平均 <strong>+21%</strong>；《F1 2021》+44%、《微软模拟飞行》+49%（前两个数字为 5800X3D vs 5800X，引自 <a href="https://www.tomshardware.com/reviews/amd-ryzen-9-7950x3d-cpu-review/6" target="_blank" rel="noopener">Tom's Hardware 7950X3D 评测</a>，2023；7950X3D vs 7950X 在这两款游戏上分别为 +38% 与 +53%）。</li><li>Linux 技术计算：Phoronix 在 285 项基准里，AI/ML（oneDNN、ONNX Runtime、NCNN、Lc0）与 HPC（OpenFOAM、Incompact3D、ASKAP）收益显著，部分项目领先幅度很大（<a href="https://www.phoronix.com/review/amd-5800x3d-linux/8" target="_blank" rel="noopener">Phoronix, 2022</a>）。</li><li>压缩：Zstd 是通用负载里少见的明显赢家（同上文）。</li></ul>
+<p><strong>几乎没收益、甚至变慢的</strong>：</p>
+<ul><li><strong>通用桌面/综合负载</strong>：Phoronix 的 285 项基准里，几何平均只快 <strong>3.9%</strong>，而且 <strong>61% 的项目 5800X 反而更快</strong>。</li><li><strong>工作集本来就装得进 32 MB 的负载</strong>：多加 64 MB 只是多了一层更慢的查找。</li><li><strong>工作集远超 96 MB 的负载</strong>：还是要去 DRAM，多出来的容量只是把悬崖往后推了一点。</li><li><strong>对频率敏感、或对核数敏感的负载</strong>：5800X3D 基频 3.4 GHz，而 5900X 是 4.7 GHz；TechInsights 明确写道，不受益于额外缓存的负载在旧型号上反而更快。</li><li><strong>GPU 受限的场景</strong>：同一款游戏在 4K + 中端显卡下，缓存差距被 GPU 吃掉。</li><li>即使是同一款游戏也不保证：7950X3D 在《GTA V》上相对 Core i9-13900K 是 <strong>−1.7%</strong>（同一 Tom's Hardware 篇）。</li></ul>
+<p>一句话归纳：<strong>3D V-Cache 买的是"把悬崖往右推 64 MB"，只对恰好站在那段悬崖上的负载付款。</strong></p>
+<hr>
+<h2 id="sec-25">五、延伸知识点</h2>
+<p><strong>1. 分块的目标层是 L2，不是 L1。</strong> 这是本文第一部分的核心结论，也是 Intel 官方手册在 Skylake-Server 上的明确建议（<a href="https://cdrdv2-public.intel.com/779559/355308-Software-Optimization-Manual-047-Changes-Doc.pdf" target="_blank" rel="noopener">Intel Optimization Reference Manual</a>）。判断标准不是"能不能装进 L1"，而是"算术强度有没有跨过机器平衡点"。</p>
+<p><strong>2. 步长为 2 的幂时要警惕组冲突，而不只是跨行。</strong> 8 KiB 步长让 <code>B</code> 的一整列 1024 个元素落进同一个组，在 8 路缓存里复用率直接归零。改 <code>T</code> 也救不了——要在数据结构层面加 padding、做转置（本站题目的解法），或者改用 <code>ikj</code> 循环序。</p>
+<p><strong>3. 64 B 填充在 Apple 平台上不一定够。</strong> x86 上按 64 B 对齐填充即可（第三方实测 12 M/s → 1400 M/s，<a href="https://unseel.com/cs/false-sharing" target="_blank" rel="noopener">unseel.com</a>）；但 Apple Silicon CPU Optimization Guide 列出 M4 的 <strong>L2 与 Memory Cache 行大小为 128 B</strong>（<a href="https://jia.je/hardware/2025/05/21/apple-m4/" target="_blank" rel="noopener">jia.je 整理</a>），第三方的 M4 实测也按 128 B 描述粒度。跨核一致性粒度若按 128 B 计，64 B 填充就不够。<strong>Apple 未公开跨核一致性粒度的明确说明，这条属于推断，跨平台代码建议直接按 128 B 填充。</strong></p>
+<p><strong>4. 排查伪共享用 <code>perf c2c</code>，不要靠猜。</strong> <code>perf c2c record</code> + <code>perf c2c report --stdio</code> 会给出 Shared Data Cache Line Table，重点看 <strong>HITM</strong>（命中了别核的 Modified 行）与 <strong>Remote HITM</strong>（跨 NUMA 节点，代价最高）两列；Red Hat 的示例输出里"LLC Misses to Remote cache (HITM)"占到 57.3% 就是典型信号（<a href="https://docs.redhat.com/es/documentation/Red_Hat_Enterprise_Linux/8/html/monitoring_and_managing_system_status_and_performance/_detecting_false_sharing_with_perf_c2c_2" target="_blank" rel="noopener">Red Hat RHEL 8 文档</a>，<a href="https://coffeebeforearch.github.io/2020/03/27/perf-c2c.html" target="_blank" rel="noopener">perf c2c 实例</a>）。</p>
+<p><strong>5. "命中率上升但程序变慢"是可诊断的。</strong> 把命中率拆成 coverage / accuracy / timeliness 三个维度看：accuracy 低于 40% 时预取器几乎必然拖慢程序；accuracy 接近 100% 但大多数预取到得太晚（如 <code>mcf</code>）同样没有收益（<a href="https://hps.ece.utexas.edu/pub/srinath_hpca07.pdf" target="_blank" rel="noopener">Srinath et al., HPCA 2007</a>）。同理，本文 1.3 节里朴素 ijk 的 LLC 命中率有 99.97%，却慢了 18 倍——<strong>命中率必须注明是在哪一级、以什么为分母</strong>。</p>
+<p><strong>6. 分块尺寸与 TLB 是耦合的。</strong> <code>N=1024</code> 的 <code>double</code> 矩阵每个 8 MiB，在 4 KB 页下是 2048 页，三个矩阵共 6144 页，远超过 L1 DTLB 的条目数（Zen 5 为 96 项、Zen 4 为 72 项、Apple M4 P 核为 160 项）。分块到 <code>T=64</code> 后工作集只有 96 KiB = <strong>24 页</strong>，稳稳落在 L1 DTLB 里。换句话说，分块同时也在给 TLB 做局部性优化——这部分与本站 <a href="../reading/tlb-address-translation-guide.html">TLB 与地址转换</a> 篇的内容交叉，那里会展开页大小、大页与 TLB 失效的处理。</p>
+<p><strong>7. 顺序访问时，硬件预取器会让分块的收益缩水。</strong> 1.6 节的流量是按"每次失效都要从 L2 取一行"算的。实际上一旦把 <code>B</code> 转置、或改用 <code>ikj</code> 序，<code>A</code>、<code>B</code>、<code>C</code> 全变成顺序流，硬件 stride 预取器会把大部分失效提前取走，实际耗时通常好于表中的带宽口径估计——这就是为什么"只转置不分块"在实测里往往能拿到朴素版的大部分收益。分块剩下的、预取器替代不了的价值是<strong>容量复用</strong>：让同一块 <code>A</code>/<code>B</code> 被 64 个不同的 <code>i</code>/<code>j</code> 复用，这是预取器再准也做不到的。反过来说，如果你的负载本来就是纯流式（遍历一次就不再访问），分块基本没用，该做的是提高带宽利用率。预取器的工作细节见本站 <a href="../reading/memory-hierarchy-latency-hiding.html">内存层次与延迟隐藏</a> 篇。</p>
+<hr>
+<h2 id="sec-26">参考来源</h2>
+<ul><li><a href="https://cdrdv2-public.intel.com/779559/355308-Software-Optimization-Manual-047-Changes-Doc.pdf" target="_blank" rel="noopener">Intel 64 and IA-32 Architectures Optimization Reference Manual</a> —— Skylake-Server non-inclusive LLC、L2 1 MB、"Consider blocking to L2" 官方建议、各级缓存延迟与带宽对比表（2019）</li><li><a href="https://csg.csail.mit.edu/6.S078/6_S078_2012_www/handouts/isca2010-rrip.pdf" target="_blank" rel="noopener">Jaleel et al., High Performance Cache Replacement Using Re-Reference Interval Prediction (RRIP), ISCA 2010</a> —— 2-bit RRPV、SRRIP 平均 +4%/+7%、DRRIP +10%、MPKI 降 5–15%、硬件比 LRU 少 2×、L1/L2 上无收益（2010）</li><li><a href="https://hc2024.hotchips.org/assets/program/conference/day2/24_HC2024.AMD.Cohen.Subramony.final.pdf" target="_blank" rel="noopener">Next Generation "Zen 5" Core, AMD Hot Chips 2024</a> —— L1D 48 KB/12 路、L2 1 MB/16 路、L2 带宽 32→64 B/clk、L3 由 L2 victim 填充、L2 tag 复制做 probe filter（2024）</li><li><a href="https://en.wikipedia.org/wiki/Zen_5" target="_blank" rel="noopener">Wikipedia: Zen 5</a> —— Zen 4 vs Zen 5 各级缓存容量/路数/带宽对照表，Zen 5 3D V-Cache CCD 共 96 MB、缓存置于核心下方（2024）</li><li><a href="https://chipsandcheese.com/p/lion-cove-intels-p-core-roars" target="_blank" rel="noopener">Chips and Cheese: Lion Cove, Intel's P-Core Roars</a> —— L0D 48 KB 4 cycle、新增 192 KB "L1"/L1.5 9 cycle、L2 2.5/3 MB 17 cycle、L3 延迟与历代 L2/L3 演进表（2024，第三方实测）</li><li><a href="https://www.techpowerup.com/review/intel-core-ultra-9-285k/3.html" target="_blank" rel="noopener">TechPowerUp: Intel Core Ultra 9 285K 架构解析</a> —— Arrow Lake Lion Cove L2 3 MB/核、全片共享 36 MB L3、E 核簇共享 4 MB L2（2024）</li><li><a href="https://developer.arm.com/compute-ip/neoverse-v3" target="_blank" rel="noopener">ARM Neoverse V3 官方规格页</a> —— L1I/L1D 64 KB 4-way、私有 L2 2 MB 8-way 10 cycle / 3 MB 12-way 12 cycle（ARM 官方）</li><li><a href="https://old.chipsandcheese.com/2024/07/22/arms-neoverse-v2-in-awss-graviton-4/" target="_blank" rel="noopener">Chips and Cheese: Arm's Neoverse V2 in AWS's Graviton 4</a> —— L1D 64 KB 4 cycle、L2 2 MB 11 cycle、L3 68 cycle、ARM 从 pseudo-LRU 换成 RRIP（2024，第三方实测）</li><li><a href="https://jia.je/hardware/2025/05/21/apple-m4/" target="_blank" rel="noopener">Apple M4 微架构评测（整理自 Apple Silicon CPU Optimization Guide）</a> —— M4 P/E 核 L1D 容量与路数、L2 16 MB/4 MB 簇共享、Memory Cache 8 MB、L2/SLC 行 128 B、load-to-use 3 cycle、16 KB 页（2025）</li><li><a href="https://jia.je/hardware/2026/07/06/apple-m2/" target="_blank" rel="noopener">Apple M2 微架构评测（Apple Silicon CPU Optimization Guide 整理，含 M1–M4 全系 SLC 配置）</a> —— M1/M2/M3/M4 SLC 均 8 MiB 16 路 128 B 行；M3 Max/M4 Max 为 48 MiB（2026）</li><li><a href="https://en.wikichip.org/w/index.php?title=intel/microarchitectures/skylake_(server)&amp;oldid=76794&amp;diff=prev" target="_blank" rel="noopener">WikiChip: Intel Skylake (server)</a> —— non-inclusive L3、1.375 MB/核、11 路、snoop filter 2048 组 12 路、L2 1 MB 16 路 14 cycle</li><li><a href="https://en.wikipedia.org/wiki/MOESI_protocol" target="_blank" rel="noopener">Wikipedia: MOESI protocol</a> —— Owned 态允许脏共享、避免写回内存后再读，引自 AMD64 Architecture Programmer's Manual Vol.2</li><li><a href="https://unseel.com/cs/false-sharing" target="_blank" rel="noopener">unseel.com: False Sharing 实测</a> —— Cascade Lake 16 线程 12 M/s → 64 B 填充后 1400 M/s</li><li><a href="https://hps.ece.utexas.edu/pub/srinath_hpca07.pdf" target="_blank" rel="noopener">Srinath et al., Feedback Directed Prefetching, HPCA 2007</a> —— 预取 accuracy/coverage/lateness 定义；accuracy &lt;40% 时流预取器必然拖慢；mcf 准确率近 100% 但 &gt;90% 太晚</li><li><a href="https://en.wikipedia.org/wiki/Cache_prefetching" target="_blank" rel="noopener">Wikipedia: Cache prefetching</a> —— 预取三指标 coverage / accuracy / timeliness 的标准定义</li><li><a href="https://www.phoronix.com/review/amd-5800x3d-linux/8" target="_blank" rel="noopener">Phoronix: AMD Ryzen 7 5800X3D on Linux</a> —— 285 项基准几何平均仅 +3.9%、61% 项目反而更慢、AI/ML 与 HPC 收益显著（2022）</li><li><a href="https://www.tomshardware.com/reviews/amd-ryzen-9-7950x3d-cpu-review/6" target="_blank" rel="noopener">Tom's Hardware: Ryzen 9 7950X3D 评测</a> —— 5800X3D vs 5800X：F1 2021 +44%、微软模拟飞行 +49%；7950X3D vs 7950X：+38% / +53%；7950X3D vs 13900K 在 GTA V 上 −1.7%（2023）</li><li><a href="https://www.techinsights.com/blog/amd-ships-3d-v-cache-processors" target="_blank" rel="noopener">TechInsights: AMD Ships 3D V-Cache Processors</a> —— 64 MB SRAM 堆叠 + 32 MB 原生 L3 = 96 MB；5800X3D 基频 3.4 GHz vs 5900X 4.7 GHz；不受益负载反而更慢（2022）</li><li><a href="https://www.techspot.com/review/1028-intel-core-i7-5775c-broadwell/" target="_blank" rel="noopener">TechSpot: Core i7-5775C Broadwell 评测</a> —— Crystal Well 128 MB eDRAM L4 参数表（2015）</li><li><a href="https://en.wikipedia.org/wiki/CPU_cache" target="_blank" rel="noopener">Wikipedia: CPU cache（VIPT / homonym / synonym / page coloring）</a> —— VIPT 索引位受页大小限制、page coloring 被淘汰的原因</li><li><a href="https://docs.redhat.com/es/documentation/Red_Hat_Enterprise_Linux/8/html/monitoring_and_managing_system_status_and_performance/_detecting_false_sharing_with_perf_c2c_2" target="_blank" rel="noopener">Red Hat RHEL 8: Detecting false sharing with perf c2c</a> —— HITM / Remote HITM 判读方法</li><li><a href="https://coffeebeforearch.github.io/2020/03/27/perf-c2c.html" target="_blank" rel="noopener">Detecting False Sharing with Perf C2C</a> —— perf c2c 实操与 HITM 含义（2020）</li></ul>
+<hr>
+<h2 id="sec-27">系列导航：处理器微架构深度指南</h2>
+<p>本文是《处理器微架构深度指南》系列之一。</p>
+<p><strong>同系列其他文章</strong>：</p>
+<ul><li><a href="branch-prediction-guide.html">分支预测完全指南：从一次数据重排优化说起</a></li><li><a href="compiler-branch-optimization.html">编译器如何自动优化分支预测</a></li><li><a href="ilp-and-pipeline-complete-guide.html">ILP 与流水线完全指南：从八累加器点积说起</a></li><li><a href="memory-hierarchy-latency-hiding.html">内存层次与延迟隐藏：从指针追逐说起</a></li><li><a href="rob-out-of-order-complete-guide.html">ROB 与乱序执行完全指南：一次瓶颈会诊的完整拆解</a></li><li><a href="frontend-and-instruction-cache.html">前端与指令缓存：为什么过度展开反而更慢</a></li><li><a href="simd-vectorization-complete-guide.html">SIMD 与向量化完全指南：从 SAXPY 到 AVX10 与矩阵扩展</a></li><li><a href="tlb-address-translation-guide.html">TLB 与地址转换：从一次聚集重排说起</a></li></ul>
+<p>所属模块：<a href="../modules/cache.html">缓存层次</a></p>
+<p class="tags"><span class="tag">缓存层次</span><span class="tag">分块</span><span class="tag">VIPT</span><span class="tag">RRIP</span><span class="tag">伪共享</span><span class="tag">一致性</span></p>
+<div class="pager">
+  <a href="../reading.html"><span class="k">← 返回</span>扩展阅读</a>
+  <a class="next" href="../modules/cache.html"><span class="k">所属模块 →</span>缓存层次</a>
+</div>
+</main>
+  <aside class="toc"><h4>本页目录</h4><a href="#n-1024" class="lv2">一、现象与量化案例：N=1024 矩阵乘法的工作集</a><a href="#1-1" class="lv3">1.1 题目与参数</a><a href="#1-2-ijk" class="lv3">1.2 朴素 ijk 的访存模式</a><a href="#1-3-mpki" class="lv3">1.3 失效次数、MPKI 与命中率</a><a href="#1-4" class="lv3">1.4 分块：工作集与算术强度</a><a href="#1-5-roofline-l2" class="lv3">1.5 Roofline：为什么分块到 L2 就够了</a><a href="#1-6-vs" class="lv3">1.6 换循环序 vs 分块：两件事，收益差一个数量级</a><a href="#sec-9" class="lv2">二、硬件全景：从地址切分到一致性</a><a href="#2-1" class="lv3">2.1 层级与分工</a><a href="#2-2" class="lv3">2.2 组相联与地址位划分</a><a href="#2-3-lru-rrip" class="lv3">2.3 替换策略：从 LRU 到 RRIP</a><a href="#2-4-mesi-moesi" class="lv3">2.4 一致性：MESI、MOESI 与伪共享</a><a href="#2-5-l1d" class="lv3">2.5 写策略，以及 L1D 真正稀缺的三种资源</a><a href="#2-6-inclusive-non-inclusive-exclusive" class="lv3">2.6 包含策略：inclusive / non-inclusive / exclusive</a><a href="#sec-16" class="lv2">三、演进史：每一步解决了什么、代价是什么</a><a href="#3-1" class="lv3">3.1 直接映射 → 组相联 → 路数增长的边际递减</a><a href="#3-2-lru-pseudo-lru-rrip" class="lv3">3.2 替换策略：LRU → Pseudo-LRU → RRIP</a><a href="#3-3" class="lv3">3.3 预取器出现之后，"命中率"这个指标开始失真</a><a href="#3-4" class="lv3">3.4 被淘汰的思路</a><a href="#2024-2026" class="lv2">四、真实处理器对比（2024–2026）</a><a href="#4-1" class="lv3">4.1 参数总表</a><a href="#4-2-zen-5" class="lv3">4.2 Zen 5 的当代变化：容量不动，带宽翻倍</a><a href="#4-3-3d-v-cache" class="lv3">4.3 3D V-Cache：哪些负载收益大，哪些几乎没收益</a><a href="#sec-25" class="lv2">五、延伸知识点</a><a href="#sec-26" class="lv2">参考来源</a><a href="#sec-27" class="lv2">系列导航：处理器微架构深度指南</a></aside>
+</div>
+<footer>
+  本站为 <a href="https://www.leetcpu.com/">leetcpu.com</a> 课程与题目的中文整理版，
+  仅用于学习交流；题目、代码版权归原站所有。内容由程序从公开页面整理并人工撰写优化报告。
+</footer>
+<script src="../assets/search.js"></script>
+<script src="../assets/app.js"></script>
+</body>
+</html>

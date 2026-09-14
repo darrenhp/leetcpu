@@ -70,7 +70,7 @@ def esc(s: str) -> str:
 
 
 def md_inline(s: str) -> str:
-    """支持 `code`、`**bold**`、`*italic*` 与 [citation:N] 来源标注。
+    """支持 `code`、`**bold**`、`*italic*`、[文字](URL) 与 [citation:N] 来源标注。
 
     行内代码先被摘出暂存，避免代码块里的 `*` / `[...]`（如 `float *A`）
     被后续的斜体或角标规则误伤。
@@ -83,7 +83,16 @@ def md_inline(s: str) -> str:
         codes.append(m.group(1))
         return f"\x00{len(codes) - 1}\x00"
 
+    def _link(m: "re.Match[str]") -> str:
+        # 注意：out 已在开头整体 html.escape 过，这里不能重复转义 &，只补引号。
+        text, url = m.group(1), m.group(2).replace('"', "&quot;")
+        ext = ' target="_blank" rel="noopener"' if url.startswith("http") else ""
+        return f'<a href="{url}"{ext}>{text}</a>'
+
     out = re.sub(r"`([^`]+)`", _stash, out)
+    # 超链接 [文字](URL)：URL 中允许出现一层成对括号（如维基的 xxx_(yyy)）。
+    # 必须在加粗/斜体之前处理，这样 **粗体链接** 也能正确嵌套。
+    out = re.sub(r"\[([^\]]+)\]\(([^()\s]*(?:\([^()]*\)[^()\s]*)*)\)", _link, out)
     out = re.sub(r"\*\*([^*\n]+)\*\*", r"<strong>\1</strong>", out)
     # 斜体：定界 * 必须紧邻非单词字符，且内容首尾不留空白。
     # 这样 `arr[i*n*n + j*n + k]` 这类乘法表达式不会被误判成斜体。
@@ -369,29 +378,114 @@ def load():
 
 
 # ---------------------------------------------------------------- 布局
-def sidebar(root: str, active: str, problems, mod_of) -> str:
-    parts = ['<h4>开始</h4>',
-             f'<a href="{root}index.html" class="{_on(active, "index")}">概览</a>',
-             f'<a href="{root}modules.html" class="{_on(active, "modules")}">知识模块</a>',
-             f'<a href="{root}problems.html" class="{_on(active, "problems")}">全部题目</a>',
-             f'<a href="{root}reading.html" class="{_on(active, "reading")}">扩展阅读</a>',
-             '<h4>知识模块</h4>']
+def sidebar(root: str, active: str, problems, mod_of, articles) -> str:
+    active_tab = "index"
+    if active == "modules" or active.startswith("mod:"):
+        active_tab = "modules"
+    elif active == "problems" or active.startswith("prob:"):
+        active_tab = "problems"
+    elif active == "reading" or active.startswith("art:"):
+        active_tab = "reading"
+
+    groups = []
+
+    # 1. 概览
+    open_idx = " open" if active_tab == "index" else ""
+    idx_body = f"""  <div class="side-body">
+    <a href="{root}index.html" class="{_on(active, 'index')}">概览首页</a>
+    <a href="{root}index.html#how">怎么用这个站</a>
+    <a href="{root}index.html#overview">题目总览</a>
+    <a href="{root}index.html#modules">知识模块</a>
+    <a href="{root}index.html#reading">扩展阅读</a>
+  </div>"""
+    groups.append(f"""<details class="side-group" name="side-tab"{open_idx}>
+  <summary>
+    <span class="side-summary-left">
+      <span class="side-arrow">▶</span>
+      <a href="{root}index.html" class="side-title {_on(active_tab, 'index')}">概览</a>
+    </span>
+  </summary>
+{idx_body}
+</details>""")
+
+    # 2. 知识模块
+    open_mod = " open" if active_tab == "modules" else ""
+    mod_links = [f'    <a href="{root}modules.html" class="{_on(active, "modules")}">模块总览</a>']
     for mid, m in MODULES.items():
-        cls = "on" if active == f"mod:{mid}" else ""
-        parts.append(f'<a href="{root}modules/{mid}.html" class="{cls}">{esc(m["zh"])}</a>')
-    parts.append('<h4>题目</h4>')
+        cls = _on(active, f"mod:{mid}")
+        mod_links.append(f'    <a href="{root}modules/{mid}.html" class="{cls}">{esc(m["zh"])}</a>')
+    mod_body = '  <div class="side-body">\n' + "\n".join(mod_links) + '\n  </div>'
+    groups.append(f"""<details class="side-group" name="side-tab"{open_mod}>
+  <summary>
+    <span class="side-summary-left">
+      <span class="side-arrow">▶</span>
+      <a href="{root}modules.html" class="side-title {_on(active_tab, 'modules')}">知识模块</a>
+    </span>
+    <span class="side-count">{len(MODULES)}</span>
+  </summary>
+{mod_body}
+</details>""")
+
+    # 3. 全部题目
+    open_prob = " open" if active_tab == "problems" else ""
+    prob_links = [f'    <a href="{root}problems.html" class="{_on(active, "problems")}">题目总览</a>']
     for mid, m in MODULES.items():
         subs = [p for p in problems if mod_of[p["slug"]] == mid]
         if not subs:
             continue
-        parts.append(f'<h4 style="margin-top:12px">{esc(m["zh"])}</h4>')
+        prob_links.append(f'    <div class="side-subhead">{esc(m["zh"])}</div>')
         for p in subs:
             z = ZH[p["slug"]]
-            cls = "on" if active == f"prob:{p['slug']}" else ""
-            parts.append(
-                f'<a href="{root}problems/{p["slug"]}.html" class="{cls}">'
+            cls = _on(active, f"prob:{p['slug']}")
+            prob_links.append(
+                f'    <a href="{root}problems/{p["slug"]}.html" class="{cls}">'
                 f'<span class="num">{p["id"]:02d}</span>{esc(z["zh"])}</a>')
-    return "\n".join(parts)
+    prob_body = '  <div class="side-body">\n' + "\n".join(prob_links) + '\n  </div>'
+    groups.append(f"""<details class="side-group" name="side-tab"{open_prob}>
+  <summary>
+    <span class="side-summary-left">
+      <span class="side-arrow">▶</span>
+      <a href="{root}problems.html" class="side-title {_on(active_tab, 'problems')}">全部题目</a>
+    </span>
+    <span class="side-count">{len(problems)}</span>
+  </summary>
+{prob_body}
+</details>""")
+
+    # 4. 扩展阅读
+    open_read = " open" if active_tab == "reading" else ""
+    read_links = [f'    <a href="{root}reading.html" class="{_on(active, "reading")}">文章总览</a>']
+    for mid, m in MODULES.items():
+        subs = [a for a in articles if a["module"] == mid]
+        if not subs:
+            continue
+        read_links.append(f'    <div class="side-subhead">{esc(m["zh"])}</div>')
+        for a in subs:
+            cls = _on(active, f"art:{a['slug']}")
+            read_links.append(
+                f'    <a href="{root}reading/{a["slug"]}.html" class="{cls}" title="{esc(a["title"])}">'
+                f'{esc(a["title"])}</a>')
+    others = [a for a in articles if a["module"] not in MODULES]
+    if others:
+        read_links.append('    <div class="side-subhead">其他文章</div>')
+        for a in others:
+            cls = _on(active, f"art:{a['slug']}")
+            read_links.append(
+                f'    <a href="{root}reading/{a["slug"]}.html" class="{cls}" title="{esc(a["title"])}">'
+                f'{esc(a["title"])}</a>')
+    read_body = '  <div class="side-body">\n' + "\n".join(read_links) + '\n  </div>'
+    groups.append(f"""<details class="side-group" name="side-tab"{open_read}>
+  <summary>
+    <span class="side-summary-left">
+      <span class="side-arrow">▶</span>
+      <a href="{root}reading.html" class="side-title {_on(active_tab, 'reading')}">扩展阅读</a>
+    </span>
+    <span class="side-count">{len(articles)}</span>
+  </summary>
+{read_body}
+</details>""")
+
+    return "\n".join(groups)
 
 
 def _on(active: str, key: str) -> str:
@@ -399,7 +493,15 @@ def _on(active: str, key: str) -> str:
 
 
 def layout(*, root: str, title: str, active: str, body: str, toc: str = "",
-           problems=None, mod_of=None, desc: str = "") -> str:
+           problems=None, mod_of=None, articles=None, desc: str = "") -> str:
+    active_tab = "index"
+    if active == "modules" or active.startswith("mod:"):
+        active_tab = "modules"
+    elif active == "problems" or active.startswith("prob:"):
+        active_tab = "problems"
+    elif active == "reading" or active.startswith("art:"):
+        active_tab = "reading"
+
     nav = [
         ("index", "概览", f"{root}index.html"),
         ("modules", "知识模块", f"{root}modules.html"),
@@ -407,8 +509,8 @@ def layout(*, root: str, title: str, active: str, body: str, toc: str = "",
         ("reading", "扩展阅读", f"{root}reading.html"),
     ]
     navhtml = "".join(
-        f'<a href="{u}" class="{_on(active, k)}">{t}</a>' for k, t, u in nav)
-    side = sidebar(root, active, problems or [], mod_of or {})
+        f'<a href="{u}" class="{_on(active_tab, k)}">{t}</a>' for k, t, u in nav)
+    side = sidebar(root, active, problems or [], mod_of or {}, articles or [])
     toc_html = f'<aside class="toc"><h4>本页目录</h4>{toc}</aside>' if toc else ""
     return f"""<!DOCTYPE html>
 <html lang="zh-CN" data-theme="light">
@@ -534,10 +636,10 @@ ChampSim / perf 环境中实测。想跑在线仿真请访问 <a href="https://w
                   [("how", "怎么用这个站"), ("overview", "题目总览"),
                    ("modules", "知识模块"), ("reading", "扩展阅读")])
     return layout(root=root, title="概览", active="index", body=body, toc=toc,
-                  problems=problems, mod_of=mod_of)
+                  problems=problems, mod_of=mod_of, articles=articles)
 
 
-def page_modules(root, problems, mod_of) -> str:
+def page_modules(root, problems, mod_of, articles) -> str:
     cards = "".join(
         f'<a class="card" href="{root}modules/{mid}.html">'
         f'<span class="badge mod" style="background:{m["color"]}">{esc(m["icon"])}</span> '
@@ -560,7 +662,7 @@ def page_modules(root, problems, mod_of) -> str:
 """
     return layout(root=root, title="知识模块", active="modules", body=body,
                   toc='<a href="#map">模块与题目的对应关系</a>',
-                  problems=problems, mod_of=mod_of)
+                  problems=problems, mod_of=mod_of, articles=articles)
 
 
 def _module_reading(root: str, mid: str, articles: list) -> str:
@@ -624,10 +726,10 @@ def page_module(root, mid, problems, mod_of, articles) -> str:
            + '<a href="#metrics">关键指标</a><a href="#problems">配套题目</a>'
            + ('<a href="#reading">扩展阅读</a>' if any(a["module"] == mid for a in articles) else ""))
     return layout(root=root, title=m["zh"], active=f"mod:{mid}", body=body, toc=toc,
-                  problems=problems, mod_of=mod_of, desc=m["tagline"])
+                  problems=problems, mod_of=mod_of, articles=articles, desc=m["tagline"])
 
 
-def page_problems(root, problems, mod_of) -> str:
+def page_problems(root, problems, mod_of, articles) -> str:
     btns = ['<button class="badge" data-filter="all" style="cursor:pointer">全部</button>']
     for mid, m in MODULES.items():
         n = len([1 for p in problems if mod_of[p["slug"]] == mid])
@@ -652,10 +754,10 @@ def page_problems(root, problems, mod_of) -> str:
 <tbody id="plist">{rows}</tbody></table>
 """
     return layout(root=root, title="全部题目", active="problems", body=body, toc="",
-                  problems=problems, mod_of=mod_of)
+                  problems=problems, mod_of=mod_of, articles=articles)
 
 
-def page_problem(root, p, prev_p, next_p, problems, mod_of) -> str:
+def page_problem(root, p, prev_p, next_p, problems, mod_of, articles) -> str:
     z = ZH[p["slug"]]
     mid = mod_of[p["slug"]]
     m = MODULES[mid]
@@ -736,7 +838,7 @@ def page_problem(root, p, prev_p, next_p, problems, mod_of) -> str:
            '<a href="#report">优化报告</a>'
            + "".join(f'<a href="#{a}">· {esc(h)}</a>' for a, h in anchors))
     return layout(root=root, title=z["zh"], active=f"prob:{p['slug']}", body=body, toc=toc,
-                  problems=problems, mod_of=mod_of, desc=z["one_liner"])
+                  problems=problems, mod_of=mod_of, articles=articles, desc=z["one_liner"])
 
 
 def page_reading(root, articles, problems, mod_of) -> str:
@@ -747,11 +849,11 @@ def page_reading(root, articles, problems, mod_of) -> str:
 {_reading_cards(root, articles)}
 """
     return layout(root=root, title="扩展阅读", active="reading", body=body, toc="",
-                  problems=problems, mod_of=mod_of,
+                  problems=problems, mod_of=mod_of, articles=articles,
                   desc="扩展阅读：分支预测、缓存层次等 CPU 微架构专题长文。")
 
 
-def page_article(root, art, problems, mod_of) -> str:
+def page_article(root, art, problems, mod_of, articles) -> str:
     """文章页。标题由正文的 H1 提供，这里不再重复输出一个 H1。"""
     m = MODULES.get(art["module"] or "")
     tags = _tag_html(art["tags"])
@@ -771,7 +873,7 @@ def page_article(root, art, problems, mod_of) -> str:
 </div>
 """
     return layout(root=root, title=art["title"], active=f"art:{art['slug']}",
-                  body=body, toc=toc, problems=problems, mod_of=mod_of,
+                  body=body, toc=toc, problems=problems, mod_of=mod_of, articles=articles,
                   desc=art["summary"])
 
 
@@ -821,8 +923,8 @@ def build(out: Path) -> None:
 
     pages = {
         out / "index.html": page_index("", problems, mod_of, articles),
-        out / "modules.html": page_modules("", problems, mod_of),
-        out / "problems.html": page_problems("", problems, mod_of),
+        out / "modules.html": page_modules("", problems, mod_of, articles),
+        out / "problems.html": page_problems("", problems, mod_of, articles),
         out / "reading.html": page_reading("", articles, problems, mod_of),
     }
     for mid in MODULES:
@@ -832,19 +934,89 @@ def build(out: Path) -> None:
         prev_p = problems[i - 1] if i > 0 else None
         next_p = problems[i + 1] if i + 1 < len(problems) else None
         pages[out / "problems" / f"{p['slug']}.html"] = page_problem(
-            "../", p, prev_p, next_p, problems, mod_of)
+            "../", p, prev_p, next_p, problems, mod_of, articles)
     for a in articles:
         pages[out / "reading" / f"{a['slug']}.html"] = page_article(
-            "../", a, problems, mod_of)
+            "../", a, problems, mod_of, articles)
 
     for path, html_text in pages.items():
         path.write_text(html_text, encoding="utf-8")
 
+    broken = check_internal_links(out)
     print(f"生成完成：{out}")
     print(f"  页面 {len(pages)} 个：首页 1 + 模块总览 1 + 题目总览 1 + 扩展阅读 1 "
           f"+ 模块 {len(MODULES)} + 题目 {len(problems)} + 文章 {len(articles)}")
     print(f"  资源：assets/style.css, assets/app.js, assets/search.json, assets/search.js")
+    if broken:
+        # 只告警不中断：分批协作时，尚未落盘的篇目被引用是正常中间态。
+        # 全部篇目定稿后，如需强制门禁，把这里改成 sys.exit(1) 即可。
+        print(f"  [警告] 站内链接失效 {len(broken)} 条：")
+        for src, href in broken:
+            print(f"         {src} -> {href}")
+
+    # 与「失效校验」分开输出的「建议」：链接都通，但文章之间可能根本没连起来。
+    isolated = find_isolated_articles(out)
+    if isolated:
+        print(f"  [提示] 互文孤岛候选（指向其他文章的去重出链 < "
+              f"{ISLAND_MIN_OUT_LINKS} 条，非错误，仅供参考）：")
+        for slug, n in isolated:
+            print(f"         {slug}: {n} 条")
     return pages
+
+
+# 站内链接可达性校验。
+# 提取所有非外部 href（http/https/#/mailto:/data:/javascript: 之外的），
+# 去掉 #fragment 后按页面所在目录解析成真实路径，检查文件是否存在。
+# 用于把「slug 写错 / 目标页还没生成」这类 404 从线上问题变成构建期问题。
+RE_HREF = re.compile(r'href="([^"]+)"')
+SKIP_SCHEMES = ("http://", "https://", "mailto:", "data:", "javascript:", "//")
+
+
+def check_internal_links(out: Path) -> list:
+    broken: list = []
+    for path in sorted(out.rglob("*.html")):
+        text = path.read_text(encoding="utf-8")
+        rel = path.relative_to(out).as_posix()
+        for href in RE_HREF.findall(text):
+            href = href.strip()
+            if not href or href.startswith(SKIP_SCHEMES) or href.startswith("#"):
+                continue
+            target = href.split("#", 1)[0]
+            if not target:                      # 纯锚点，如 href="#sec-4"
+                continue
+            if not (path.parent / target).resolve().exists():
+                broken.append((rel, href))
+    return broken
+
+
+# 互文孤岛提示（建议性质，与上面的「失效校验」性质不同，输出必须分开）。
+# 链接全部可达 ≠ 互文体系成立：一篇文章可能一条都不链向其他深度文章，
+# 读者在里面点不到同系列任何一篇，而可达性校验对此完全不会报警。
+# 因此这里单独统计每篇文章指向「其他文章页」的去重出链数，低于阈值就提示。
+ISLAND_MIN_OUT_LINKS = 2
+
+
+def find_isolated_articles(out: Path, min_links: int = ISLAND_MIN_OUT_LINKS) -> list:
+    reading = out / "reading"
+    if not reading.is_dir():
+        return []
+    isolated: list = []
+    for path in sorted(reading.glob("*.html")):
+        links = set()
+        for href in RE_HREF.findall(path.read_text(encoding="utf-8")):
+            href = href.strip()
+            if not href or href.startswith(SKIP_SCHEMES) or href.startswith("#"):
+                continue
+            target = href.split("#", 1)[0]
+            if not target:
+                continue
+            resolved = (path.parent / target).resolve()
+            # 只统计指向 reading/ 下、且不是自身的文章页
+            if resolved.parent == reading.resolve() and resolved != path.resolve():
+                links.add(resolved.name)
+        if len(links) < min_links:
+            isolated.append((path.stem, len(links)))
+    return isolated
 
 
 if __name__ == "__main__":

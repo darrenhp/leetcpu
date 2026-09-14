@@ -11,7 +11,7 @@
 <body data-root="../">
 <header class="topbar">
   <a class="brand" href="../index.html"><span class="dot">C</span>LeetCPU 中文站</a>
-  <nav class="topnav"><a href="../index.html" class="">概览</a><a href="../modules.html" class="">知识模块</a><a href="../problems.html" class="">全部题目</a><a href="../reading.html" class="">扩展阅读</a></nav>
+  <nav class="topnav"><a href="../index.html" class="">概览</a><a href="../modules.html" class="">知识模块</a><a href="../problems.html" class="on">全部题目</a><a href="../reading.html" class="">扩展阅读</a></nav>
   <div class="searchbox">
     <input id="q" type="search" placeholder="搜索题目 / 模块 / 文章…" autocomplete="off">
     <div id="results"></div>
@@ -19,49 +19,110 @@
   <button class="iconbtn" data-theme-toggle title="切换明暗主题">◐</button>
 </header>
 <div class="wrap">
-  <nav class="sidebar"><h4>开始</h4>
-<a href="../index.html" class="">概览</a>
-<a href="../modules.html" class="">知识模块</a>
-<a href="../problems.html" class="">全部题目</a>
-<a href="../reading.html" class="">扩展阅读</a>
-<h4>知识模块</h4>
-<a href="../modules/branch.html" class="">分支预测</a>
-<a href="../modules/cache.html" class="">缓存层次</a>
-<a href="../modules/ilp.html" class="">ILP 与流水线</a>
-<a href="../modules/memory.html" class="">内存层次与延迟隐藏</a>
-<a href="../modules/rob.html" class="">ROB 与乱序执行</a>
-<a href="../modules/frontend.html" class="">前端与指令缓存</a>
-<a href="../modules/tlb.html" class="">TLB 与地址转换</a>
-<a href="../modules/simd.html" class="">SIMD 与向量化</a>
-<h4>题目</h4>
-<h4 style="margin-top:12px">分支预测</h4>
-<a href="../problems/stable-partition-branches.html" class=""><span class="num">01</span>稳定划分：让分支变得可预测</a>
-<a href="../problems/branchless-score-window.html" class=""><span class="num">10</span>区间计分：用无符号技巧消除分支</a>
-<a href="../problems/masked-saxpy-branchless.html" class="on"><span class="num">20</span>掩码 SAXPY：去分支换取吞吐</a>
-<a href="../problems/lookup-table-grade-bands.html" class=""><span class="num">22</span>等级分档：用查表替代嵌套分支</a>
-<h4 style="margin-top:12px">缓存层次</h4>
-<a href="../problems/matrix-multiply-tiling.html" class=""><span class="num">02</span>矩阵乘法：分块与转置</a>
-<a href="../problems/particle-struct-repacking.html" class=""><span class="num">08</span>粒子结构体：AoS 转 SoA</a>
-<a href="../problems/image-blur-tiling.html" class=""><span class="num">09</span>图像模糊：让工作集留在缓存里</a>
-<a href="../problems/ece-jacobi-stencil-lab.html" class=""><span class="num">11</span>Jacobi 五点 stencil：二维分块</a>
-<a href="../problems/3d-loop-interchange.html" class=""><span class="num">14</span>三维数组：修正循环顺序</a>
-<a href="../problems/binary-search-eytzinger.html" class=""><span class="num">15</span>二分查找：Eytzinger 布局 + 预取</a>
-<a href="../problems/row-major-cache-locality.html" class=""><span class="num">17</span>二维网格求和：修正列优先遍历</a>
-<h4 style="margin-top:12px">ILP 与流水线</h4>
-<a href="../problems/reduction-tree-ilp.html" class=""><span class="num">03</span>规约树：打断依赖链</a>
-<a href="../problems/bitset-popcount-throughput.html" class=""><span class="num">07</span>位图统计：用 popcount 硬件替代逐位扫描</a>
-<a href="../problems/histogram-dependency-chains.html" class=""><span class="num">13</span>直方图：打断写依赖链</a>
-<a href="../problems/streaming-square-sum.html" class=""><span class="num">16</span>流式平方和：多累加器提升 ILP</a>
-<a href="../problems/saxpy-auto-vectorize.html" class=""><span class="num">18</span>SAXPY：解锁自动向量化</a>
-<a href="../problems/dot-product-eight-accumulators.html" class=""><span class="num">21</span>点积：八个累加器</a>
-<h4 style="margin-top:12px">内存层次与延迟隐藏</h4>
-<a href="../problems/interleaved-pointer-chasing.html" class=""><span class="num">04</span>指针追逐：恢复内存级并行</a>
-<a href="../problems/strided-sum-prefetch.html" class=""><span class="num">06</span>跨步求和：用预取隐藏延迟</a>
-<a href="../problems/irregular-gather-prefetch.html" class=""><span class="num">12</span>不规则聚集：为随机访问提前预取</a>
-<h4 style="margin-top:12px">ROB 与乱序执行</h4>
-<a href="../problems/bottleneck-triage.html" class=""><span class="num">05</span>瓶颈会诊：一次修好三个问题</a>
-<h4 style="margin-top:12px">TLB 与地址转换</h4>
-<a href="../problems/gather-reorder-cache-clustering.html" class=""><span class="num">19</span>聚集重排：按页聚簇访问</a></nav>
+  <nav class="sidebar"><details class="side-group" name="side-tab">
+  <summary>
+    <span class="side-summary-left">
+      <span class="side-arrow">▶</span>
+      <a href="../index.html" class="side-title ">概览</a>
+    </span>
+  </summary>
+  <div class="side-body">
+    <a href="../index.html" class="">概览首页</a>
+    <a href="../index.html#how">怎么用这个站</a>
+    <a href="../index.html#overview">题目总览</a>
+    <a href="../index.html#modules">知识模块</a>
+    <a href="../index.html#reading">扩展阅读</a>
+  </div>
+</details>
+<details class="side-group" name="side-tab">
+  <summary>
+    <span class="side-summary-left">
+      <span class="side-arrow">▶</span>
+      <a href="../modules.html" class="side-title ">知识模块</a>
+    </span>
+    <span class="side-count">8</span>
+  </summary>
+  <div class="side-body">
+    <a href="../modules.html" class="">模块总览</a>
+    <a href="../modules/branch.html" class="">分支预测</a>
+    <a href="../modules/cache.html" class="">缓存层次</a>
+    <a href="../modules/ilp.html" class="">ILP 与流水线</a>
+    <a href="../modules/memory.html" class="">内存层次与延迟隐藏</a>
+    <a href="../modules/rob.html" class="">ROB 与乱序执行</a>
+    <a href="../modules/frontend.html" class="">前端与指令缓存</a>
+    <a href="../modules/tlb.html" class="">TLB 与地址转换</a>
+    <a href="../modules/simd.html" class="">SIMD 与向量化</a>
+  </div>
+</details>
+<details class="side-group" name="side-tab" open>
+  <summary>
+    <span class="side-summary-left">
+      <span class="side-arrow">▶</span>
+      <a href="../problems.html" class="side-title on">全部题目</a>
+    </span>
+    <span class="side-count">22</span>
+  </summary>
+  <div class="side-body">
+    <a href="../problems.html" class="">题目总览</a>
+    <div class="side-subhead">分支预测</div>
+    <a href="../problems/stable-partition-branches.html" class=""><span class="num">01</span>稳定划分：让分支变得可预测</a>
+    <a href="../problems/branchless-score-window.html" class=""><span class="num">10</span>区间计分：用无符号技巧消除分支</a>
+    <a href="../problems/masked-saxpy-branchless.html" class="on"><span class="num">20</span>掩码 SAXPY：去分支换取吞吐</a>
+    <a href="../problems/lookup-table-grade-bands.html" class=""><span class="num">22</span>等级分档：用查表替代嵌套分支</a>
+    <div class="side-subhead">缓存层次</div>
+    <a href="../problems/matrix-multiply-tiling.html" class=""><span class="num">02</span>矩阵乘法：分块与转置</a>
+    <a href="../problems/particle-struct-repacking.html" class=""><span class="num">08</span>粒子结构体：AoS 转 SoA</a>
+    <a href="../problems/image-blur-tiling.html" class=""><span class="num">09</span>图像模糊：让工作集留在缓存里</a>
+    <a href="../problems/ece-jacobi-stencil-lab.html" class=""><span class="num">11</span>Jacobi 五点 stencil：二维分块</a>
+    <a href="../problems/3d-loop-interchange.html" class=""><span class="num">14</span>三维数组：修正循环顺序</a>
+    <a href="../problems/binary-search-eytzinger.html" class=""><span class="num">15</span>二分查找：Eytzinger 布局 + 预取</a>
+    <a href="../problems/row-major-cache-locality.html" class=""><span class="num">17</span>二维网格求和：修正列优先遍历</a>
+    <div class="side-subhead">ILP 与流水线</div>
+    <a href="../problems/reduction-tree-ilp.html" class=""><span class="num">03</span>规约树：打断依赖链</a>
+    <a href="../problems/bitset-popcount-throughput.html" class=""><span class="num">07</span>位图统计：用 popcount 硬件替代逐位扫描</a>
+    <a href="../problems/histogram-dependency-chains.html" class=""><span class="num">13</span>直方图：打断写依赖链</a>
+    <a href="../problems/streaming-square-sum.html" class=""><span class="num">16</span>流式平方和：多累加器提升 ILP</a>
+    <a href="../problems/saxpy-auto-vectorize.html" class=""><span class="num">18</span>SAXPY：解锁自动向量化</a>
+    <a href="../problems/dot-product-eight-accumulators.html" class=""><span class="num">21</span>点积：八个累加器</a>
+    <div class="side-subhead">内存层次与延迟隐藏</div>
+    <a href="../problems/interleaved-pointer-chasing.html" class=""><span class="num">04</span>指针追逐：恢复内存级并行</a>
+    <a href="../problems/strided-sum-prefetch.html" class=""><span class="num">06</span>跨步求和：用预取隐藏延迟</a>
+    <a href="../problems/irregular-gather-prefetch.html" class=""><span class="num">12</span>不规则聚集：为随机访问提前预取</a>
+    <div class="side-subhead">ROB 与乱序执行</div>
+    <a href="../problems/bottleneck-triage.html" class=""><span class="num">05</span>瓶颈会诊：一次修好三个问题</a>
+    <div class="side-subhead">TLB 与地址转换</div>
+    <a href="../problems/gather-reorder-cache-clustering.html" class=""><span class="num">19</span>聚集重排：按页聚簇访问</a>
+  </div>
+</details>
+<details class="side-group" name="side-tab">
+  <summary>
+    <span class="side-summary-left">
+      <span class="side-arrow">▶</span>
+      <a href="../reading.html" class="side-title ">扩展阅读</a>
+    </span>
+    <span class="side-count">9</span>
+  </summary>
+  <div class="side-body">
+    <a href="../reading.html" class="">文章总览</a>
+    <div class="side-subhead">分支预测</div>
+    <a href="../reading/branch-prediction-guide.html" class="" title="分支预测完全指南：从一次数据重排优化说起">分支预测完全指南：从一次数据重排优化说起</a>
+    <a href="../reading/compiler-branch-optimization.html" class="" title="编译器如何自动优化分支预测">编译器如何自动优化分支预测</a>
+    <div class="side-subhead">缓存层次</div>
+    <a href="../reading/cache-hierarchy-complete-guide.html" class="" title="缓存层次完全指南：从一次矩阵乘法分块说起">缓存层次完全指南：从一次矩阵乘法分块说起</a>
+    <div class="side-subhead">ILP 与流水线</div>
+    <a href="../reading/ilp-and-pipeline-complete-guide.html" class="" title="ILP 与流水线完全指南：从八累加器点积说起">ILP 与流水线完全指南：从八累加器点积说起</a>
+    <div class="side-subhead">内存层次与延迟隐藏</div>
+    <a href="../reading/memory-hierarchy-latency-hiding.html" class="" title="内存层次与延迟隐藏：从指针追逐说起">内存层次与延迟隐藏：从指针追逐说起</a>
+    <div class="side-subhead">ROB 与乱序执行</div>
+    <a href="../reading/rob-out-of-order-complete-guide.html" class="" title="ROB 与乱序执行完全指南：一次瓶颈会诊的完整拆解">ROB 与乱序执行完全指南：一次瓶颈会诊的完整拆解</a>
+    <div class="side-subhead">前端与指令缓存</div>
+    <a href="../reading/frontend-and-instruction-cache.html" class="" title="前端与指令缓存：为什么过度展开反而更慢">前端与指令缓存：为什么过度展开反而更慢</a>
+    <div class="side-subhead">TLB 与地址转换</div>
+    <a href="../reading/tlb-address-translation-guide.html" class="" title="TLB 与地址转换：从一次聚集重排说起">TLB 与地址转换：从一次聚集重排说起</a>
+    <div class="side-subhead">SIMD 与向量化</div>
+    <a href="../reading/simd-vectorization-complete-guide.html" class="" title="SIMD 与向量化完全指南：从 SAXPY 到 AVX10 与矩阵扩展">SIMD 与向量化完全指南：从 SAXPY 到 AVX10 与矩阵扩展</a>
+  </div>
+</details></nav>
   <main>
 <div class="meta">
   <span class="badge">20</span>

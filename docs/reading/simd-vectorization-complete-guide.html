@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SIMD 与向量化完全指南：从 SAXPY 到 AVX10 与矩阵扩展 · LeetCPU 中文站</title>
+<meta name="description" content="同一份 SAXPY 循环，把向量宽度从 128 位加到 512 位，理论算力涨 4 倍，实测耗时却可能一模一样。本文先用 roofline 把这个反直觉变成可手算的判据，再沿 x86 与 ARM 两条主线梳理从 MMX 到 AVX10、AMX、SME 的取舍，最后对比四家的真实实现宽度。">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232f6feb'/><text x='16' y='23' font-size='19' font-family='monospace' fill='white' text-anchor='middle'>C</text></svg>">
+</head>
+<body data-root="../">
+<header class="topbar">
+  <a class="brand" href="../index.html"><span class="dot">C</span>LeetCPU 中文站</a>
+  <nav class="topnav"><a href="../index.html" class="">概览</a><a href="../modules.html" class="">知识模块</a><a href="../problems.html" class="">全部题目</a><a href="../reading.html" class="on">扩展阅读</a></nav>
+  <div class="searchbox">
+    <input id="q" type="search" placeholder="搜索题目 / 模块 / 文章…" autocomplete="off">
+    <div id="results"></div>
+  </div>
+  <button class="iconbtn" data-theme-toggle title="切换明暗主题">◐</button>
+</header>
+<div class="wrap">
+  <nav class="sidebar"><details class="side-group" name="side-tab">
+  <summary>
+    <span class="side-summary-left">
+      <span class="side-arrow">▶</span>
+      <a href="../index.html" class="side-title ">概览</a>
+    </span>
+  </summary>
+  <div class="side-body">
+    <a href="../index.html" class="">概览首页</a>
+    <a href="../index.html#how">怎么用这个站</a>
+    <a href="../index.html#overview">题目总览</a>
+    <a href="../index.html#modules">知识模块</a>
+    <a href="../index.html#reading">扩展阅读</a>
+  </div>
+</details>
+<details class="side-group" name="side-tab">
+  <summary>
+    <span class="side-summary-left">
+      <span class="side-arrow">▶</span>
+      <a href="../modules.html" class="side-title ">知识模块</a>
+    </span>
+    <span class="side-count">8</span>
+  </summary>
+  <div class="side-body">
+    <a href="../modules.html" class="">模块总览</a>
+    <a href="../modules/branch.html" class="">分支预测</a>
+    <a href="../modules/cache.html" class="">缓存层次</a>
+    <a href="../modules/ilp.html" class="">ILP 与流水线</a>
+    <a href="../modules/memory.html" class="">内存层次与延迟隐藏</a>
+    <a href="../modules/rob.html" class="">ROB 与乱序执行</a>
+    <a href="../modules/frontend.html" class="">前端与指令缓存</a>
+    <a href="../modules/tlb.html" class="">TLB 与地址转换</a>
+    <a href="../modules/simd.html" class="">SIMD 与向量化</a>
+  </div>
+</details>
+<details class="side-group" name="side-tab">
+  <summary>
+    <span class="side-summary-left">
+      <span class="side-arrow">▶</span>
+      <a href="../problems.html" class="side-title ">全部题目</a>
+    </span>
+    <span class="side-count">22</span>
+  </summary>
+  <div class="side-body">
+    <a href="../problems.html" class="">题目总览</a>
+    <div class="side-subhead">分支预测</div>
+    <a href="../problems/stable-partition-branches.html" class=""><span class="num">01</span>稳定划分：让分支变得可预测</a>
+    <a href="../problems/branchless-score-window.html" class=""><span class="num">10</span>区间计分：用无符号技巧消除分支</a>
+    <a href="../problems/masked-saxpy-branchless.html" class=""><span class="num">20</span>掩码 SAXPY：去分支换取吞吐</a>
+    <a href="../problems/lookup-table-grade-bands.html" class=""><span class="num">22</span>等级分档：用查表替代嵌套分支</a>
+    <div class="side-subhead">缓存层次</div>
+    <a href="../problems/matrix-multiply-tiling.html" class=""><span class="num">02</span>矩阵乘法：分块与转置</a>
+    <a href="../problems/particle-struct-repacking.html" class=""><span class="num">08</span>粒子结构体：AoS 转 SoA</a>
+    <a href="../problems/image-blur-tiling.html" class=""><span class="num">09</span>图像模糊：让工作集留在缓存里</a>
+    <a href="../problems/ece-jacobi-stencil-lab.html" class=""><span class="num">11</span>Jacobi 五点 stencil：二维分块</a>
+    <a href="../problems/3d-loop-interchange.html" class=""><span class="num">14</span>三维数组：修正循环顺序</a>
+    <a href="../problems/binary-search-eytzinger.html" class=""><span class="num">15</span>二分查找：Eytzinger 布局 + 预取</a>
+    <a href="../problems/row-major-cache-locality.html" class=""><span class="num">17</span>二维网格求和：修正列优先遍历</a>
+    <div class="side-subhead">ILP 与流水线</div>
+    <a href="../problems/reduction-tree-ilp.html" class=""><span class="num">03</span>规约树：打断依赖链</a>
+    <a href="../problems/bitset-popcount-throughput.html" class=""><span class="num">07</span>位图统计：用 popcount 硬件替代逐位扫描</a>
+    <a href="../problems/histogram-dependency-chains.html" class=""><span class="num">13</span>直方图：打断写依赖链</a>
+    <a href="../problems/streaming-square-sum.html" class=""><span class="num">16</span>流式平方和：多累加器提升 ILP</a>
+    <a href="../problems/saxpy-auto-vectorize.html" class=""><span class="num">18</span>SAXPY：解锁自动向量化</a>
+    <a href="../problems/dot-product-eight-accumulators.html" class=""><span class="num">21</span>点积：八个累加器</a>
+    <div class="side-subhead">内存层次与延迟隐藏</div>
+    <a href="../problems/interleaved-pointer-chasing.html" class=""><span class="num">04</span>指针追逐：恢复内存级并行</a>
+    <a href="../problems/strided-sum-prefetch.html" class=""><span class="num">06</span>跨步求和：用预取隐藏延迟</a>
+    <a href="../problems/irregular-gather-prefetch.html" class=""><span class="num">12</span>不规则聚集：为随机访问提前预取</a>
+    <div class="side-subhead">ROB 与乱序执行</div>
+    <a href="../problems/bottleneck-triage.html" class=""><span class="num">05</span>瓶颈会诊：一次修好三个问题</a>
+    <div class="side-subhead">TLB 与地址转换</div>
+    <a href="../problems/gather-reorder-cache-clustering.html" class=""><span class="num">19</span>聚集重排：按页聚簇访问</a>
+  </div>
+</details>
+<details class="side-group" name="side-tab" open>
+  <summary>
+    <span class="side-summary-left">
+      <span class="side-arrow">▶</span>
+      <a href="../reading.html" class="side-title on">扩展阅读</a>
+    </span>
+    <span class="side-count">9</span>
+  </summary>
+  <div class="side-body">
+    <a href="../reading.html" class="">文章总览</a>
+    <div class="side-subhead">分支预测</div>
+    <a href="../reading/branch-prediction-guide.html" class="" title="分支预测完全指南：从一次数据重排优化说起">分支预测完全指南：从一次数据重排优化说起</a>
+    <a href="../reading/compiler-branch-optimization.html" class="" title="编译器如何自动优化分支预测">编译器如何自动优化分支预测</a>
+    <div class="side-subhead">缓存层次</div>
+    <a href="../reading/cache-hierarchy-complete-guide.html" class="" title="缓存层次完全指南：从一次矩阵乘法分块说起">缓存层次完全指南：从一次矩阵乘法分块说起</a>
+    <div class="side-subhead">ILP 与流水线</div>
+    <a href="../reading/ilp-and-pipeline-complete-guide.html" class="" title="ILP 与流水线完全指南：从八累加器点积说起">ILP 与流水线完全指南：从八累加器点积说起</a>
+    <div class="side-subhead">内存层次与延迟隐藏</div>
+    <a href="../reading/memory-hierarchy-latency-hiding.html" class="" title="内存层次与延迟隐藏：从指针追逐说起">内存层次与延迟隐藏：从指针追逐说起</a>
+    <div class="side-subhead">ROB 与乱序执行</div>
+    <a href="../reading/rob-out-of-order-complete-guide.html" class="" title="ROB 与乱序执行完全指南：一次瓶颈会诊的完整拆解">ROB 与乱序执行完全指南：一次瓶颈会诊的完整拆解</a>
+    <div class="side-subhead">前端与指令缓存</div>
+    <a href="../reading/frontend-and-instruction-cache.html" class="" title="前端与指令缓存：为什么过度展开反而更慢">前端与指令缓存：为什么过度展开反而更慢</a>
+    <div class="side-subhead">TLB 与地址转换</div>
+    <a href="../reading/tlb-address-translation-guide.html" class="" title="TLB 与地址转换：从一次聚集重排说起">TLB 与地址转换：从一次聚集重排说起</a>
+    <div class="side-subhead">SIMD 与向量化</div>
+    <a href="../reading/simd-vectorization-complete-guide.html" class="on" title="SIMD 与向量化完全指南：从 SAXPY 到 AVX10 与矩阵扩展">SIMD 与向量化完全指南：从 SAXPY 到 AVX10 与矩阵扩展</a>
+  </div>
+</details></nav>
+  <main>
+<div class="meta">
+  <span class="badge">扩展阅读</span>
+  <a class="badge mod" style="background:#00b8a3" href="../modules/simd.html">SIMD 与向量化</a>
+  <span class="sub">2026-09-14</span>
+</div>
+<h1 id="simd-saxpy-avx10">SIMD 与向量化完全指南：从 SAXPY 到 AVX10 与矩阵扩展</h1>
+<blockquote><p>向量宽度翻倍，加速比并不翻倍。这篇文章先用一份 SAXPY 实验把这件事变成可以手算的数字，再讲清楚宽度到底由硬件的哪一级决定，最后沿 x86 与 ARM 两条 ISA 主线走到 2025 年的 AVX10、AMX 与 SME。</p></blockquote>
+<hr>
+<h2 id="saxpy">一、一个可复现实验：SAXPY 的四档向量宽度</h2>
+<h3 id="sec-3">实验设计</h3>
+<p>SAXPY 是 BLAS 里最简单的一级运算，<code>y[i] = a*x[i] + y[i]</code>。它是"流式"（streaming）负载的原型：没有数据复用，每个元素读一次、写一次。站点题目 <a href="../problems/saxpy-auto-vectorize.html">SAXPY — 解锁自动向量化</a> 给的标量版本是：</p>
+<div class="codeblock">
+  <div class="codebar"><span class="label">c</span><button class="copybtn">复制</button></div>
+  <pre data-code="void saxpy_scalar(float a, const float *restrict x, float *restrict y, int n) {
+    for (int i = 0; i &lt; n; ++i)
+        y[i] = a * x[i] + y[i];
+}"></pre>
+</div>
+<p>下面用 GCC/Clang 的 target attribute 在同一个文件里编出四档实现：</p>
+<div class="codeblock">
+  <div class="codebar"><span class="label">c</span><button class="copybtn">复制</button></div>
+  <pre data-code="/* SSE: 128 bit = 4 x float */
+__attribute__((target(&quot;sse&quot;)))
+void saxpy_sse(float a, const float *restrict x, float *restrict y, int n) {
+    for (int i = 0; i + 4 &lt;= n; i += 4) {
+        __m128 xv = _mm_loadu_ps(x + i);
+        __m128 yv = _mm_loadu_ps(y + i);
+        _mm_storeu_ps(y + i, _mm_add_ps(_mm_mul_ps(_mm_set1_ps(a), xv), yv));
+    }                                   /* 尾部处理省略 */
+}
+
+/* AVX2: 256 bit = 8 x float，用 FMA 合并乘加 */
+__attribute__((target(&quot;avx2,fma&quot;)))
+void saxpy_avx2(float a, const float *restrict x, float *restrict y, int n) {
+    __m256 av = _mm256_set1_ps(a);
+    for (int i = 0; i + 8 &lt;= n; i += 8) {
+        __m256 xv = _mm256_loadu_ps(x + i);
+        __m256 yv = _mm256_loadu_ps(y + i);
+        _mm256_storeu_ps(y + i, _mm256_fmadd_ps(av, xv, yv));
+    }
+}
+
+/* AVX-512: 512 bit = 16 x float */
+__attribute__((target(&quot;avx512f&quot;)))
+void saxpy_avx512(float a, const float *restrict x, float *restrict y, int n) {
+    __m512 av = _mm512_set1_ps(a);
+    for (int i = 0; i + 16 &lt;= n; i += 16) {
+        __m512 xv = _mm512_loadu_ps(x + i);
+        __m512 yv = _mm512_loadu_ps(y + i);
+        _mm512_storeu_ps(y + i, _mm512_fmadd_ps(av, xv, yv));
+    }
+}"></pre>
+</div>
+<p>测量要点：进程绑定核心、频率 governor 设为 performance、n 取两档（下文说明）、每档跑 100 次取中位数。</p>
+<h3 id="4-8-16">理论加速比：4 → 8 → 16</h3>
+<p>假设核心有 2 条全宽 FMA 流水线（Intel Sapphire Rapids / Golden Cove、AMD Zen 5 都是这个配置，见第四部分），主频 3.0 GHz，一条 FMA 算 2 次浮点运算：</p>
+<table><thead><tr><th>实现</th><th>向量宽度</th><th>每指令元素数</th><th>FLOP/指令</th><th>峰值 FLOP/cycle</th><th>峰值 GFLOP/s @3 GHz</th></tr></thead><tbody><tr><td>标量</td><td>32 bit</td><td>1</td><td>2</td><td>4</td><td>12</td></tr><tr><td>SSE</td><td>128 bit</td><td>4</td><td>8</td><td>16</td><td>48</td></tr><tr><td>AVX2</td><td>256 bit</td><td>8</td><td>16</td><td>32</td><td>96</td></tr><tr><td>AVX-512</td><td>512 bit</td><td>16</td><td>32</td><td>64</td><td>192</td></tr></tbody></table>
+<p>"教科书答案"是 SSE 4×、AVX2 8×、AVX-512 16×。这是<strong>计算上限</strong>，只有在执行单元真的成为瓶颈时才成立。</p>
+<h3 id="roofline">为什么实测达不到：roofline 与算术强度</h3>
+<p>roofline 模型把可达性能写成两条线的下包络：</p>
+<div class="codeblock">
+  <div class="codebar"><span class="label">text</span><button class="copybtn">复制</button></div>
+  <pre data-code="可达性能 = min( 峰值计算吞吐, 算术强度 AI × 可用内存带宽 B )"></pre>
+</div>
+<p>SAXPY 的算术强度可以直接数出来。对每个元素：</p>
+<ul><li>读 <code>x[i]</code>：4 字节（必然 miss，流式）</li><li>读 <code>y[i]</code>：4 字节（与写分配 RFO 是同一条 cache line，只算一次）</li><li>写回 <code>y[i]</code>：4 字节（dirty line 淘汰时落盘）</li><li>浮点运算：1 次乘 + 1 次加 = 2 FLOP</li></ul>
+<div class="codeblock">
+  <div class="codebar"><span class="label">text</span><button class="copybtn">复制</button></div>
+  <pre data-code="AI(SAXPY) = 2 FLOP / 12 B = 1/6 ≈ 0.167 FLOP/byte"></pre>
+</div>
+<p>这个数字低得惊人。作为对照，寄存器分块的小矩阵乘可以做到 2–4 FLOP/byte（下文算）。把 AI = 1/6 代回 roofline：</p>
+<table><thead><tr><th>可用带宽 B</th><th>带宽上限 AI×B</th><th>标量</th><th>SSE</th><th>AVX2</th><th>AVX-512</th><th>瓶颈</th></tr></thead><tbody><tr><td>25 GB/s</td><td>4.2</td><td>4.2</td><td>4.2</td><td>4.2</td><td>4.2</td><td>带宽</td></tr><tr><td>50 GB/s</td><td>8.3</td><td>8.3</td><td>8.3</td><td>8.3</td><td>8.3</td><td>带宽</td></tr><tr><td>100 GB/s</td><td>16.7</td><td>12.0</td><td>16.7</td><td>16.7</td><td>16.7</td><td>标量算、其余带宽</td></tr><tr><td>200 GB/s</td><td>33.3</td><td>12.0</td><td>33.3</td><td>33.3</td><td>33.3</td><td>带宽</td></tr><tr><td>400 GB/s</td><td>66.7</td><td>12.0</td><td>48.0</td><td>66.7</td><td>66.7</td><td>带宽</td></tr><tr><td>576 GB/s</td><td>96.0</td><td>12.0</td><td>48.0</td><td>96.0</td><td>96.0</td><td>AVX2 刚好吃满</td></tr></tbody></table>
+<p>（每格为 <code>min(计算峰值, 带宽上限)</code>，单位 GFLOP/s。）</p>
+<p>"脊点"（ridge point）——需要多少带宽才能喂满某个宽度——才是这张表最有价值的输出：</p>
+<table><thead><tr><th>向量宽度</th><th>喂满所需内存带宽</th></tr></thead><tbody><tr><td>标量</td><td>72 GB/s</td></tr><tr><td>SSE (128b)</td><td>288 GB/s</td></tr><tr><td>AVX2 (256b)</td><td>576 GB/s</td></tr><tr><td>AVX-512 (512b)</td><td>1152 GB/s</td></tr></tbody></table>
+<p>结论是硬的：<strong>在 3 GHz / 2×FMA 的核心上，要让 SAXPY 跑满 AVX-512 需要 1152 GB/s 内存带宽。</strong>目前单路 CPU 里最宽的服务器平台——12 通道 DDR5-6000 的 AMD EPYC 9005——理论峰值是 12 × 48 GB/s = 576 GB/s（<a href="https://documentation.suse.com/en-us/sbp/tuning-performance/html/SBP-AMD-EPYC-5-SLES15SP6/index.html" target="_blank" rel="noopener">SUSE 与 AMD 联合发布的 EPYC 9005 调优文档</a>，2025-04），刚好只够喂满 AVX2。也就是说，在 SAXPY 这类流式负载上，AVX-512 多出来的那 512 位数据通路在可见未来都是白花的面积与功耗。</p>
+<h3 id="n-512">大 n：带宽接管之后，512 位白给</h3>
+<p>取 n = 67 108 864（64 M 个 float）。x、y 各 256 MB，合计 512 MB，明确超出任何桌面/服务器的末级缓存，DRAM 带宽完全接管。</p>
+<ul><li>浮点运算总量：2 × 6.71e7 = 1.34e8 FLOP</li><li>内存流量：6.71e7 × 12 B = 8.05e8 B ≈ 805 MB</li></ul>
+<p>代入 B = 100 GB/s（典型双通道 DDR5 桌面平台的量级；请读者用 <code>stream</code> 或 <code>likwid-bench</code> 实测自己机器的数字）：</p>
+<table><thead><tr><th>实现</th><th>计算时间</th><th>带宽时间 (805 MB ÷ 100 GB/s)</th><th>实测 ≈ max</th><th>加速比</th></tr></thead><tbody><tr><td>标量</td><td>11.2 ms</td><td>8.05 ms</td><td><strong>11.2 ms</strong></td><td>1.00×</td></tr><tr><td>SSE</td><td>2.80 ms</td><td>8.05 ms</td><td><strong>8.05 ms</strong></td><td>1.39×</td></tr><tr><td>AVX2</td><td>1.40 ms</td><td>8.05 ms</td><td><strong>8.05 ms</strong></td><td>1.39×</td></tr><tr><td>AVX-512</td><td>0.70 ms</td><td>8.05 ms</td><td><strong>8.05 ms</strong></td><td>1.39×</td></tr></tbody></table>
+<p><strong>从 SSE 到 AVX-512，向量宽度翻了 4 倍，耗时一模一样。</strong>加速比被卡在 1.39×——这个数字根本不是"SIMD 效率"，而是标量版计算时间与带宽时间的比值（11.2 / 8.05）：你拿到的 1.39× 不是向量化的功劳，而是"标量太慢，慢到刚好贴近带宽墙"。 → 完整推导见 <a href="../reading/cache-hierarchy-complete-guide.html">缓存层次完全指南</a>。</p>
+<p>这也解释了为什么很多人"加了 <code>-mavx512f</code> 没感觉"：不是编译器没生成 512 位指令，是这个负载根本不在计算侧。</p>
+<h3 id="n-l1">小 n：驻留 L1 时，宽度是真的有用</h3>
+<p>把 n 降到 4096（x、y 各 16 KB，合计 32 KB，能装进 48 KB 的 L1D，如 AMD Zen 5 与 Intel Lion Cove）。此时访存不再走 DRAM，瓶颈回到<strong>访存指令条数</strong>：每个元素需要 2 次 load + 1 次 store，每周期能发射的 load/store 条数基本固定（Zen 5 每周期 2 条 512-bit load + 1 条 512-bit store，见 <a href="https://www.techpowerup.com/review/amd-ryzen-7-9700x/2.html" target="_blank" rel="noopener">TechPowerUp Zen 5 架构解析</a>），于是每周期推进的元素数正比于向量宽度：</p>
+<table><thead><tr><th>实现</th><th>每周期元素数（LSU 上限）</th><th>4096 个元素所需周期</th><th>相对标量</th></tr></thead><tbody><tr><td>标量</td><td>1</td><td>4096</td><td>1×</td></tr><tr><td>SSE</td><td>4</td><td>1024</td><td>4×</td></tr><tr><td>AVX2</td><td>8</td><td>512</td><td>8×</td></tr><tr><td>AVX-512</td><td>16</td><td>256</td><td>16×</td></tr></tbody></table>
+<p>注意前提：<strong>LSU 必须能在一周期内吞下整条 512-bit store</strong>。在 Zen 5 这类完整 512-bit 数据通路的核心上成立；在 Zen 4 那种 "double-pumped 256-bit" 实现上，512-bit store 要拆成两次 256-bit 发射，访存指令条数不再下降，AVX-512 相对 AVX2 就只剩寄存器数量和掩码的收益（第二部分详述）。这一段是<strong>推导</strong>，不是厂商公布的数字。</p>
+<h3 id="gemm">反例：寄存器分块的 GEMM</h3>
+<p>再看算术强度高的负载：把小矩阵乘的输出块留在向量寄存器里累加。设输出块 mr × nr，A、B 从内存流式读入，C 常驻寄存器：</p>
+<div class="codeblock">
+  <div class="codebar"><span class="label">text</span><button class="copybtn">复制</button></div>
+  <pre data-code="FLOP = 2 · mr · nr · K
+字节 = (mr + nr) · K · 4                      (fp32)
+AI   = 2·mr·nr / (4·(mr+nr))   FLOP/byte"></pre>
+</div>
+<table><thead><tr><th>实现</th><th>可用寄存器</th><th>典型输出块</th><th>AI (FLOP/B)</th><th>AI × 100 GB/s</th><th>计算峰值</th></tr></thead><tbody><tr><td>SSE</td><td>16 × 128 bit</td><td>4 × 4</td><td>1.0</td><td>100 GFLOP/s</td><td>48</td></tr><tr><td>AVX2</td><td>16 × 256 bit</td><td>8 × 8</td><td>2.0</td><td>200 GFLOP/s</td><td>96</td></tr><tr><td>AVX-512</td><td>32 × 512 bit</td><td>16 × 16</td><td>4.0</td><td>400 GFLOP/s</td><td>192</td></tr></tbody></table>
+<p><strong>三档全部落在计算受限区</strong>，宽度翻倍真正兑现成 2× 实测加速比。而且这里是双重收益：更宽的向量不仅每指令算得更多，还让寄存器装得下更大的输出块，AI 从 1.0 涨到 4.0，把负载从带宽侧推到计算侧。这正是后面"矩阵扩展"一路走下去的动机。 这就是 ILP 的向量版本：更少的指令、更短的迭代间隔，代价是更高的寄存器压力和更长的指令延迟。→ <a href="../reading/ilp-and-pipeline-complete-guide.html">ILP 与流水线完全指南</a></p>
+<p>（AI 随 tile 边长线性增长，也是 <a href="../problems/matrix-multiply-tiling.html">矩阵乘法 — 缓存分块</a> 那道题的答案：分块尺寸本质上就是在买算术强度。）</p>
+<h3 id="sec-9">判据小结</h3>
+<p>判断"该用多宽的向量"只需三步：</p>
+<ol><li>数出 AI = 浮点运算次数 ÷ 必须从内存搬运的字节数（<strong>写回也算流量</strong>，这是最容易漏的一项）。</li><li>算出 ridge 带宽 = 目标宽度的计算峰值 ÷ AI。</li><li>实际可用带宽<strong>远低于</strong> ridge 带宽 → 先优化访存（分块、预取、改布局、减少 RFO），加宽向量没有意义；实际带宽<strong>远高于</strong> ridge 带宽 → 加宽向量直接兑现。</li></ol>
+<hr>
+<h2 id="sec-10">二、硬件全景：向量宽度到底由哪一级决定</h2>
+<h3 id="xmm-zmm-v-z">寄存器堆：从 xmm 到 zmm，从 V 到 Z</h3>
+<p>x86 侧是"一代一宽度、下层是上层的低半部分"：xmm(128) ⊂ ymm(256) ⊂ zmm(512)。AVX/AVX2 只有 16 个向量寄存器，AVX-512 扩到 32 个并新增 8 个 64-bit 掩码寄存器 k0–k7——Intel AVX10.2 官方规范把这条写成了架构承诺："32 vector registers and eight mask registers at vector lengths 128, 256, and 512"（<a href="https://cdrdv2-public.intel.com/856721/361050-005-intel-avx10.2-spec-jun2025.pdf" target="_blank" rel="noopener">Intel AVX10.2 规范 Rev 5.0，2025-06，§3.1.1</a>）。</p>
+<p>ARM 侧的命名完全不同：NEON 用 V0–V31（32 个 128-bit），SVE/SVE2 用 Z0–Z31（32 个可变长）+ 16 个谓词寄存器 P0–P15 + 一个 FFR（First Fault Register），见 <a href="https://developer.arm.com/architectures/scalable-vector-extensions" target="_blank" rel="noopener">Arm 官方 SVE 介绍</a>。SVE 的向量长度在 128 到 2048 bit 之间、必须是 128 的倍数。</p>
+<p>寄存器<strong>数量</strong>和宽度一样重要：AVX-512 的 32 × 512 bit = 2 KB 寄存器堆，是 AVX2 的 16 × 256 bit = 512 B 的四倍，这直接决定了寄存器分块能开多大（见上文 GEMM 表格）。</p>
+<h3 id="sec-12">执行端口与数据通路宽度</h3>
+<p>寄存器宽度是 ISA 概念，<strong>真正决定吞吐的是执行单元的数据通路宽度</strong>，两者经常不一致：</p>
+<table><thead><tr><th>微架构</th><th>ISA 支持</th><th>实际数据通路</th><th>512-bit FMA 吞吐</th><th>来源</th></tr></thead><tbody><tr><td>AMD Zen 4 (2022)</td><td>AVX-512</td><td>2 条 256-bit（double-pumped）</td><td>512-bit 指令拆成两个 256-bit 微操</td><td><a href="https://www.tomshardware.com/pc-components/cpus/amd-deep-dives-zen-5-ryzen-9000-and-strix-point-cpu-rdna-35-gpu-and-xdna-2-architectures/4" target="_blank" rel="noopener">Tom's Hardware Zen 5 解析</a></td></tr><tr><td>AMD Zen 5 (2024)</td><td>AVX-512</td><td>完整 512-bit</td><td>每周期 2 条 512-bit FMA</td><td>同上；<a href="https://www.amd.com/en/blogs/2025/leadership-hpc-performance-with-5th-generation-amd.html" target="_blank" rel="noopener">AMD 官方博客</a></td></tr><tr><td>Intel Golden Cove / Sapphire Rapids (2023)</td><td>AVX-512</td><td>2 × 512-bit FMA</td><td>port0+port1 两个 256-bit 融合成 1 个 512-bit，port5 再挂 1 个</td><td><a href="https://old.chipsandcheese.com/2023/03/12/a-peek-at-sapphire-rapids/" target="_blank" rel="noopener">Chips and Cheese: Sapphire Rapids</a></td></tr><tr><td>Intel Lion Cove (2024)</td><td>AVX-512（产品上禁用）</td><td>4 条 256-bit 流水线</td><td>512-bit 不启用</td><td><a href="https://www.techpowerup.com/review/intel-core-ultra-9-285k/3.html" target="_blank" rel="noopener">TechPowerUp Arrow Lake 架构</a>；<a href="https://www.hwcooling.net/en/zen-5-amds-most-innovative-core-since-the-original-zen-analysis/4" target="_blank" rel="noopener">HWCooling 对比分析</a></td></tr></tbody></table>
+<p>AMD 官方博客把 Zen 4 / Zen 5 的差别写成了公式（FP64）：Zen 4 是 <code>256b / 64b × (2 pipes × 2 ops) = 16 FLOP/cycle</code>，Zen 5 是 <code>512b / 64b × (2 pipes × 2 ops) = 32 FLOP/cycle</code>——同一个"每周期 2 条 FMA"，但 Zen 4 的 AVX-512 指令要花 2 个周期。<strong>所以在 Zen 4 上编译 AVX-512 代码，FMA 吞吐相对 AVX2 一分不涨</strong>；AVX-512 在 Zen 4 上的真实收益是 32 个寄存器、掩码、以及 VNNI 等新指令，而不是 FLOPs 翻倍。Zen 5 才第一次拿到"每周期 2 条 512-bit FMA"。</p>
+<h3 id="avx-512-license">频率惩罚：AVX-512 的 license 三档</h3>
+<p>这是真实的、且被 Intel 官方文档承认的现象。Intel Optimization Reference Manual 把 Skylake Server 的 turbo 频率分成三档（<a href="https://cdrdv2-public.intel.com/814198/248966-Optimization-Reference-Manual-V1-050.pdf" target="_blank" rel="noopener">Table 2-12，文档号 248966-050</a>）：</p>
+<table><thead><tr><th>Level</th><th>类别</th><th>最高频率</th><th>触发的指令类型</th></tr></thead><tbody><tr><td>L0</td><td>AVX2 light</td><td>最高</td><td>标量、SSE、AVX128、不含 FP/INT MUL/FMA 的 AVX2</td></tr><tr><td>L1</td><td>AVX2 heavy + AVX-512 light</td><td>Max AVX2</td><td>含 FP/INT MUL/FMA 的 AVX2；不含 FP/INT MUL/FMA 的 AVX-512</td></tr><tr><td>L2</td><td>AVX-512 heavy</td><td>Max AVX-512</td><td>含 FP/INT MUL/FMA 的 AVX-512</td></tr></tbody></table>
+<p>手册还给了几条网上很少被提到的硬细节：</p>
+<ul><li><strong>PMU 事件</strong>：<code>CORE_POWER.LVL0_TURBO_LICENSE</code> / <code>LVL1_TURBO_LICENSE</code> / <code>LVL2_TURBO_LICENSE</code>，可以直接数出你的程序在每一档各跑了多少周期。</li><li><strong>升档延迟最高 500 μs</strong>：核心请求更高 license 时，PCU 最多要 500 微秒才批，这期间核心只能跑在更低的峰值能力上。</li><li><strong>回血定时器约 2 ms</strong>：回到高档要等约 2 毫秒，而任何会请求新 license 的条件都会<strong>重置</strong>这个定时器。这是"混合负载里偶尔来一条 512-bit 指令就拖垮全程"的机制根源——不是那条指令慢，是它把后面整段标量代码锁在了低档。</li><li><strong>跨档阈值有具体例子</strong>：手册写了 Xeon Platinum 8180 在 <strong>65 个周期</strong>的窗口内执行 110 条 AVX-512 light + 20 条 256-bit heavy，就会被从 license 1 推到 license 2。也就是说，256-bit 与 512-bit 混用不会"取加权平均"，混得够密就直接掉到最低档。</li></ul>
+<p>关于"到底降多少"，手册只给了档位名称（P0n / P0n-AVX2 / P0n-AVX-512），<strong>没有任何百分比或 MHz 数字</strong>，因为具体频率是 per-SKU 的。第三方实测可以作为量级参考：Travis Downs 在 SKX W-2104（无 turbo，标称 3.2 GHz）上测到的三档是 <strong>L0 3.2 GHz / L1 2.8 GHz / L2 2.4 GHz</strong>；他还发现一次降档要经历约 9 μs 的 "voltage-only" 过渡（此时频率还没变，但 512-bit 指令的 IPC 已经掉到约 1/4）加约 11 μs 的完全停顿，合计约 20 μs——更惊人的是，<strong>单独一条 <code>vpor zmm0,zmm0,zmm0</code> 就足以把频率从 3.2 GHz 打到 2.8 GHz</strong>（<a href="https://travisdowns.github.io/blog/2020/01/17/avxfreq1.html" target="_blank" rel="noopener">Travis Downs, 2020</a>，第三方实测，已核对原文）。这正是"轻量指令也算 light 档、但照样触发降档"的直接证据。</p>
+<blockquote><p><strong>两个常见错误</strong>：一是把网传的"L1 ≈ 85%、L2 ≈ 60%"当事实——这两个数字来自 Wikipedia 的 AVX 条目，其中 60% 一档原文就带"存疑"标记；而且它们与上面那颗 W-2104 的实测（100% / 87.5% / 75%）差得很远，正因为档位频率是 per-SKU 的。<strong>不要用任何具体百分比做设计依据。</strong>二是把"三档"当成一直成立的事实。</p></blockquote>
+<p><strong>这段演进本身比"三档是什么"更有信息量</strong>：Skylake Server 三档 → Ice Lake 只剩两级且幅度大幅收窄（第三方整理为约 97%，且只在单核 boost 生效时触发，多核满载不触发）→ Rocket Lake 完全不因向量指令降频 → Alder Lake 起 AVX-512 因 E-core 被禁用，整件事在客户端又不适用了 → Sapphire Rapids 上 Chips and Cheese 实测 512-bit 向量也能跑在 3.8 GHz，"不像有固化的 AVX-512 频率惩罚"。另外 AMD 一侧没有 Intel 这种 license 分档机制，Zen 5 官方称 AVX-512 负载下仍可维持满载频率。（Ice Lake / Rocket Lake 的两档与不降频为第三方整理，未找到 Intel 官方对应表述。）</p>
+<p>最后一层平衡很重要：<strong>降频不等于亏。</strong>同一份手册明确指出，频率受限的深度学习负载若以很高比例跑 AVX-512 heavy 指令，相对同样的 AVX2 版本仍能拿到 <strong>1.3×–1.5×</strong> 性能提升；LINPACK 也是"频率下降但性能仍然上升"的典型（手册 Fig 2-8）。所以判断标准只有一个——<strong>端到端时间</strong>，不是频率计数器。</p>
+<h3 id="sec-14">掩码寄存器：可变长度向量的条件执行</h3>
+<p>传统写法里，"向量循环里的 if" 是个两难：要么退化成标量 + SIMD 混合（尾部与边界要写两套），要么算完再 blend（白算但省分支）。掩码机制把条件变成操作数：</p>
+<div class="codeblock">
+  <div class="codebar"><span class="label">c</span><button class="copybtn">复制</button></div>
+  <pre data-code="/* AVX-512: k1 里的每一位控制一个 lane 是否参与 */
+__mmask16 k1 = _mm512_cmp_ps_mask(xv, _mm512_set1_ps(0.0f), _CMP_GT_OQ);
+__m512 r = _mm512_mask_fmadd_ps(av, k1, xv, yv);   /* k1=0 的 lane 保持 yv 原值 */"></pre>
+</div>
+<p>SVE 把这个思路推到了极致——<strong>每条</strong> SVE 指令都带谓词，不活跃的 lane 不加载、不计算、不写回，连越界访问都不会触发缺页。于是"尾部处理"这个固定宽度 SIMD 的固有包袱直接消失：</p>
+<div class="codeblock">
+  <div class="codebar"><span class="label">c</span><button class="copybtn">复制</button></div>
+  <pre data-code="for (uint64_t i = 0; i &lt; n; i += svcntw()) {         /* svcntw() 运行时才知道 */
+    svbool_t pg = svwhilelt_b32(i, n);               /* 生成谓词，自动处理尾部 */
+    svfloat32_t xv = svld1_f32(pg, x + i);
+    svfloat32_t yv = svld1_f32(pg, y + i);
+    svst1_f32(pg, y + i, svmad_f32_x(pg, av, xv, yv));
+}"></pre>
+</div>
+<p>这正是 <a href="../problems/masked-saxpy-branchless.html">掩码 SAXPY</a> 那道题的硬件基础。AVX-512 有 8 个掩码寄存器（k0 常被隐式用作"全 1"，不能做谓词目标），SVE 有 16 个 P 寄存器；Chips and Cheese 在 Sapphire Rapids 上实测出约 152 项掩码寄存器重命名条目，说明这块堆料相当足，不太会成为重命名瓶颈。</p>
+<h3 id="gather-scatter">Gather / Scatter：不连续访问的代价</h3>
+<p>gather（按索引向量收集不连续元素）让不规则数据结构也能向量化，但代价远高于连续访问。Google Highway 的官方 FAQ 给了一个很好用的经验值：</p>
+<blockquote><p>"Platforms that support it typically process one lane per cycle. This can be far slower than normal Load/Store (which can typically handle two or even three entire vectors per cycle)."（<a href="https://github.com/google/highway/blob/2c2cdd144e9aabe16220682445ee9a7a33c5a851/g3doc/faq.md" target="_blank" rel="noopener">google/highway FAQ</a>）</p></blockquote>
+<p>也就是说，<strong>一条 16 lane 的 AVX-512 gather 大约要 16 个周期</strong>，而同样 16 个 float 用连续 load 只要 0.5 个周期——差了 30 倍。更糟的是不同 uarch 实现差异极大：据 uops.info 数据（Stack Overflow 上的整理），<code>VPGATHERDD ymm</code> 在 Skylake 上是 5 个 μops / 逆吞吐 5.0 周期，在 Zen 3 上是 39 个 μops / 逆吞吐 8.0 周期——Zen 3 上的 gather 基本退化到与标量持平。还有一个真实案例：LLVM 上有 issue 报告 clang 在 <code>-O3 -march=native</code> 下自动生成 gather/scatter，导致某图像解码程序比 <code>-O2</code> 慢一倍（<a href="https://github.com/llvm/llvm-project/issues/87640" target="_blank" rel="noopener">llvm/llvm-project#87640</a>）。</p>
+<p>判据：<strong>只有当索引本身是向量化算出来的（比如查表、稀疏结构、直方图）且后续计算量足够大时，gather 才划算</strong>；如果 gather 之后每个元素只做一两次运算，还不如直接标量。详见 <a href="../problems/irregular-gather-prefetch.html">不规则聚集</a>。</p>
+<h3 id="sec-16">在整条流水线上的位置</h3>
+<p>把向量指令放回"取指→译码→执行→访存→retire"：</p>
+<ul><li><strong>译码</strong>：512-bit 指令编码更长（EVEX 前缀 4 字节），复杂指令（如 gather、部分 permute）会被拆成多个 μop 甚至走微码 sequencer，直接吃前端带宽。</li><li><strong>重命名</strong>：向量物理寄存器堆按宽度切分。Golden Cove 做了个有趣的取舍——<strong>只为一部分向量寄存器提供 512-bit 重命名能力</strong>，这样在跑标量/AVX2 代码时能腾出更多重命名项，代价是 512-bit 代码的可用重命名资源变少（Chips and Cheese 实测）。</li><li><strong>调度/执行</strong>：端口数量与数据通路宽度（见上）。</li><li><strong>访存</strong>：这是最常被忽略的一级。LSU 每周期能发几条 512-bit load/store，往往比 FMA 数量更早成为天花板——SAXPY 就是典型（第一部分的小 n 实验）。</li><li><strong>retire</strong>：宽向量指令的 retire 带宽通常不是瓶颈，但混合 256/512-bit 代码会触发数据通路模式切换（Sapphire Rapids 上 port0/port1 的 FMA 单元要整体在"2×256"和"1×512"之间配置），混着用不会比纯 512-bit 更快。</li></ul>
+<hr>
+<h2 id="sec-17">三、演进史：每一步解决了什么、付出了什么</h2>
+<h3 id="x86-mmx-sse-avx-avx2-avx-512">x86 主线：MMX → SSE → AVX/AVX2 → AVX-512</h3>
+<table><thead><tr><th>年份</th><th>扩展</th><th>宽度</th><th>解决了什么</th><th>引入了什么代价</th></tr></thead><tbody><tr><td>1997</td><td>MMX</td><td>64 bit</td><td>首次给 x86 整数 SIMD</td><td>寄存器<strong>别名在 x87 堆栈</strong>上，MMX 与浮点切换要清空状态，代价极高；只支持整数</td></tr><tr><td>1999</td><td>SSE</td><td>128 bit</td><td>独立 xmm 寄存器 + 单精度浮点</td><td>只支持单精度；需要 OS 支持 XSAVE 才能保存新上下文</td></tr><tr><td>2001</td><td>SSE2</td><td>128 bit</td><td>双精度 + 128-bit 整数，成为 x86-64 基线</td><td>寄存器仍只有 8 个（x86-64 扩到 16）</td></tr><tr><td>2011</td><td>AVX</td><td>256 bit</td><td>ymm 寄存器；VEX 编码带来<strong>三操作数非破坏性</strong>目标</td><td>更宽的上下文保存；频率惩罚开始成为话题</td></tr><tr><td>2013</td><td>AVX2</td><td>256 bit</td><td>256-bit 整数、FMA3、首次引入 gather</td><td>执行单元面积与功耗显著上升</td></tr><tr><td>2016/2017</td><td>AVX-512</td><td>512 bit</td><td>zmm × 32、k0–k7 掩码、EVEX 编码、内嵌舍入/异常抑制、scatter</td><td>20 个独立 CPUID feature flag 造成<strong>严重的子集碎片化</strong>；功耗/面积/频率问题</td></tr></tbody></table>
+<p>注意 AVX-512 首次亮相是 2016 的 Knights Landing（Xeon Phi），真正进入主流服务器是 2017 的 Skylake-SP/Skylake-X。从 2016 到 2023 这七年里，"某个 CPU 支持 AVX-512"这句话几乎没有信息量——它支持的可能是 F/CD/ER/PF 中的任意子集。</p>
+<h3 id="alder-lake-avx-512">Alder Lake 与 AVX-512 的"启用—禁用"反复</h3>
+<p>这是近年最值得记的一段历史。2021 年 Alder Lake 引入 Golden Cove P-core + Gracemont E-core 的混合架构：P-core 有完整的 512-bit FMA 硬件，E-core 完全没有。x86 生态长期假设"CPUID 对所有核一致"，于是只能上报交集——AVX2。Intel 的做法是先让 BIOS/微码不枚举 AVX-512，随后在 2022 年初直接<strong>在硅片上熔断（fusing off）</strong>，堵死"关掉 E-core 就能开 AVX-512"这条路（<a href="https://www.tomshardware.com/features/intel-architecture-day-2021-intel-unveils-alder-lake-golden-cove-and-gracemont-cores/2" target="_blank" rel="noopener">Tom's Hardware 当时的报道</a>；<a href="https://www.pcgamer.com/intel-kills-alder-lake-avx-512-support-for-good" target="_blank" rel="noopener">PCGamer 后续报道</a>）。Raptor Lake 同样处理。</p>
+<p>到 2024 年的 Arrow Lake / Lunar Lake，Lion Cove P-core 依然保留 512-bit 执行单元，Skymont E-core 的向量引擎是 4 条 128-bit（<a href="https://www.techpowerup.com/review/intel-core-ultra-9-285k/3.html" target="_blank" rel="noopener">TechPowerUp</a>），AVX-512 仍然因异构而在产品级被禁用。<strong>同一时期 AMD 从 Zen 4（2022）起在所有核心上一致支持 AVX-512</strong>——这是 x86 生态里一次罕见的角色反转。</p>
+<h3 id="avx10-intel-2023">AVX10：Intel 的统一方案（2023 起）</h3>
+<p>2023 年 7 月 Intel 公布 AVX10，目标很直接：<strong>用一个版本号取代 AVX-512 那 20 个 feature flag，并让 P-core 与 E-core 拥有同一套向量 ISA。</strong></p>
+<ul><li><strong>AVX10.1</strong>：纯过渡版本，"only enumerates the Intel AVX-512 instruction set at 128, 256, and 512 bits"，首发于 Granite Rapids（Xeon 6 P-core），用于软件提前适配（官方规范 §3.1）。</li><li><strong>AVX10.2</strong>："the initial, fully-featured version ... available across both client and server product lines"。新增内容按官方规范 §3.1.4 是六类：AI 数据类型与转换（含 <strong>FP8</strong>，E5M2 / E4M3，遵循 OCP OFP8 规范）、媒体加速（VMPSADBW 扩到 512-bit、16-bit VNNI 全符号组合）、IEEE-754-2019 的 min/max、饱和转换、零扩展的部分向量拷贝、FP 标量比较增强。</li><li><strong>规范版本</strong>：官方《Intel Advanced Vector Extensions 10.2 Architecture Specification》文档号 361050，<strong>Rev 5.0，2025 年 6 月</strong>（PDF 首页明确 "June, 2025 / Revision 5.0"）。</li><li><strong>枚举方式</strong>：<code>CPUID.(EAX=07H,ECX=01H):EDX[bit 19]</code> 表示支持，版本号在 <code>CPUID.(EAX=24H,ECX=00H):EBX[7:0]</code>。</li><li><strong>一次重要反转</strong>：早期规范里有 VL128/VL256/VL512 三个枚举位（即"E-core 只到 256-bit"方案）。Rev 5.0 的脚注明确写着这三个位已改为保留，且"<strong>All processors supporting Intel AVX10 will include support for all vector lengths</strong>"。这与 2025 年 3 月 Intel 更新 AVX10 白皮书 3.0 版时的说法一致：所有平台（含 E-core）都将支持 512-bit，编译器不再需要 <code>avx10.x-256/512</code> 选项（<a href="https://www.phoronix.com/news/Intel-AVX10-Drops-256-Bit" target="_blank" rel="noopener">Phoronix 报道，2025-03</a>，引用 Intel 白皮书原文与 GCC 补丁说明）。<strong>这是"被淘汰的思路"的又一个例子：Intel 用了两年才放弃 256-bit-only E-core 方案。</strong></li><li><strong>兼容性</strong>：任何枚举 AVX10 的处理器也会同时枚举 AVX / AVX2 / AVX-512，老二进制不受影响；但 AVX-512 ISA 就此冻结，新特性只加在 AVX10 上。</li></ul>
+<h3 id="arm-neon-sve-sve2-sme">ARM 主线：NEON → SVE/SVE2 → SME</h3>
+<p>NEON 是固定 128-bit（Armv7/8），简单高效但<strong>宽度写死在 ISA 里</strong>——想变宽就要换一套指令。SVE（Armv8.2，2016 公布）的破局点是"向量长度由实现决定、由运行时查询"：合法实现为 128/256/512/1024/2048 bit（<a href="https://developer.arm.com/architectures/scalable-vector-extensions" target="_blank" rel="noopener">Arm 官方</a>）。同一个二进制可以在 128-bit 的 Neoverse V2 上跑，也可以在未来 2048-bit 的机器上跑，不需要重编。代价是软件模型大改：编译期不知道宽度，所有循环必须写成"谓词驱动 + <code>svcntb()</code> 取运行时长度"。</p>
+<p>SVE2（Armv9）在 SVE 之上补齐了 NEON 覆盖的领域（密码、多媒体、压缩/解压），让 NEON 和 SVE 合流。SME（Scalable Matrix Extension，Armv9）在 SVE 之上加了二维的 ZA tile 存储和外积累加指令 <code>FMOPA</code>，并引入 streaming SVE 模式（<code>smstart</code>/<code>smstop</code>）。</p>
+<h3 id="amx-sme">矩阵扩展：三个都叫 AMX / SME，但完全不是一回事</h3>
+<p>这是本节最需要读者小心的地方。</p>
+<table><thead><tr><th>名称</th><th>厂商</th><th>性质</th><th>关键参数</th></tr></thead><tbody><tr><td><strong>Intel AMX</strong></td><td>Intel</td><td>公开 ISA，文档齐全</td><td>8 个 tile（TMM0–TMM7），每个 16 行 × 64 字节 = 1 KiB，共 8 KiB；TMUL 单元支持 BF16 / INT8（后续 AMX-FP16、AMX-COMPLEX）；第四代至强单核每周期 1024 次 BF16 或 2048 次 INT8 运算（<a href="https://www.intel.co.za/content/www/us/en/developer/articles/technical/tuning-guide-for-ai-on-the-4th-generation.html" target="_blank" rel="noopener">Intel 第四代至强 AI 调优指南</a>）</td></tr><tr><td><strong>ARM SME</strong></td><td>Arm</td><td>公开 ISA（Armv9）</td><td>ZA 二维存储 = SVL × SVL 字节；外积 <code>FMOPA</code>；可选 streaming 模式；SME2 加多向量指令</td></tr><tr><td><strong>Apple AMX</strong></td><td>Apple</td><td><strong>完全未公开、无文档</strong></td><td>第三方逆向得到的形态：X/Y/Z 三个寄存器堆，一个 32×32 的 MAC 网格（每个单元做 16-bit MAC，2×2 子网格做 32-bit MAC，4×4 做 64-bit）；单条指令可完成一个 X 寄存器与一个 Y 寄存器的完整外积并累加到 Z（<a href="https://github.com/corsix/amx" target="_blank" rel="noopener">corsix/amx 逆向工程仓库</a>，<strong>第三方实测/逆向，非官方数字</strong>）</td></tr></tbody></table>
+<p><strong>Apple 的 AMX 与 Intel 的 AMX 同名纯属巧合，架构、寄存器模型、指令编码、编程接口全都不一样</strong>——连上游那个仓库都在 README 里专门写了这句提醒。Apple 的 AMX 只能通过 Accelerate 等高层框架间接使用（或者用逆向出来的内联汇编，风险自负）。</p>
+<p>矩阵扩展的共同点是<strong>继续买算术强度</strong>：AVX-512 的 16×16 输出块是 4 FLOP/B，Intel AMX 的一个 16×32×16（BF16）tile 操作是 16384 FLOP / 2048 B = 8 FLOP/B，翻了一倍。SIMD 走到头之后，这就是唯一的路。</p>
+<hr>
+<h2 id="2024-2026">四、真实处理器对比（2024–2026）</h2>
+<h3 id="sec-24">各家当前实现</h3>
+<table><thead><tr><th>维度</th><th>Intel</th><th>AMD</th><th>ARM</th><th>Apple</th></tr></thead><tbody><tr><td>当前代表性的 P-core</td><td>Lion Cove（Arrow Lake / Lunar Lake，2024）</td><td>Zen 5（2024）</td><td>Neoverse V3 / V2</td><td>M4（2024）</td></tr><tr><td>最高 SIMD 宽度（可用）</td><td><strong>AVX2（256-bit）</strong>；512-bit 硬件存在但产品级禁用</td><td><strong>AVX-512（512-bit）</strong>，完整 512-bit 数据通路</td><td>SVE2，实现长度 <strong>128-bit</strong></td><td>NEON 128-bit（+ SME，SVL=512）</td></tr><tr><td>FP32 峰值（FLOP/cycle/核）</td><td>32（2×256-bit FMA）</td><td><strong>64</strong>（2×512-bit FMA）</td><td>32（4×128-bit）</td><td>32（4×128-bit）</td></tr><tr><td>矩阵扩展</td><td>Intel AMX（服务器 Sapphire Rapids / Granite Rapids 起）</td><td>无（消费级/EPYC 通用核均未见公开支持）</td><td>ARM SME / SME2（视实现）</td><td>Apple AMX（未公开）+ SME（SVL=512）</td></tr><tr><td>掩码/谓词</td><td>k0–k7（AVX-512，产品上禁用）</td><td>k0–k7</td><td>P0–P15</td><td>无 SVE 谓词；SME 有 P0–P15</td></tr></tbody></table>
+<p>数字来源与年份：Intel Lion Cove 执行单元见 <a href="https://www.techpowerup.com/review/intel-core-ultra-9-285k/3.html" target="_blank" rel="noopener">TechPowerUp Arrow Lake 架构页</a>（2024）；Zen 5 每周期 FP64 32 FLOP 见 <a href="https://www.amd.com/en/blogs/2025/leadership-hpc-performance-with-5th-generation-amd.html" target="_blank" rel="noopener">AMD 官方博客</a>（2025），FP32 为其两倍；Neoverse V2 的"4×128-bit 功能单元"见 <a href="https://docs.nvidia.com/grace-perf-tuning-guide/index.html" target="_blank" rel="noopener">NVIDIA Grace 调优指南</a>；Apple M4 NEON 4×128-bit 与 SME 见 <a href="https://github.com/corsix/amx" target="_blank" rel="noopener">corsix/amx（逆向，非官方）</a> 与 <a href="https://arxiv.org/abs/2512.21473" target="_blank" rel="noopener">arXiv 2512.21473（Apple M4 Pro 上 SVL=512、ZA=4096 字节实测）</a>。</p>
+<h3 id="intel-avx-512">Intel：哪些型号有 AVX-512，哪些被阉割</h3>
+<table><thead><tr><th>世代</th><th>P-core</th><th>E-core</th><th>AVX-512 是否可用</th><th>说明</th></tr></thead><tbody><tr><td>Skylake-X / Skylake-SP (2017)</td><td>Skylake</td><td>无</td><td>是</td><td>2×512-bit FMA</td></tr><tr><td>Ice Lake (2019) / Tiger Lake (2020) / Rocket Lake (2021)</td><td>Sunny Cove / Willow Cove / Cypress Cove</td><td>无</td><td>是</td><td>全核一致，无异构问题</td></tr><tr><td>Alder Lake (2021) / Raptor Lake (2022)</td><td>Golden Cove / Raptor Cove</td><td>Gracemont</td><td>否（后期硅片熔断）</td><td>E-core 不支持，CPUID 不上报（<a href="https://www.tomshardware.com/features/intel-architecture-day-2021-intel-unveils-alder-lake-golden-cove-and-gracemont-cores/2" target="_blank" rel="noopener">Tom's Hardware</a>）</td></tr><tr><td>Sapphire Rapids (2023)</td><td>Golden Cove</td><td>无</td><td>是</td><td>2×512-bit FMA + AMX</td></tr><tr><td>Granite Rapids (2024)</td><td>Redwood Cove</td><td>无</td><td>是（枚举 AVX10.1/512）</td><td>首个支持 AVX10 的产品</td></tr><tr><td>Arrow Lake / Lunar Lake (2024)</td><td>Lion Cove</td><td>Skymont（4×128-bit）</td><td>否</td><td>同 Alder Lake 逻辑</td></tr><tr><td>Panther Lake (2025–2026)</td><td>Cougar Cove</td><td>Darkmont</td><td><strong>存疑</strong></td><td>有第三方依据 Intel《Architecture Instruction Set Extensions Programming Reference》(2025-09) 指出 Panther Lake 不支持 AVX10.1/10.2，但未找到 Intel 官方页面直接确认，此处存疑</td></tr></tbody></table>
+<h3 id="amd-zen-4-zen-5-512-bit">AMD：Zen 4 与 Zen 5 的 512-bit 差别</h3>
+<p>Zen 4（2022）是"用 256-bit 数据通路跑两次来模拟 512-bit"——官方说法是 dual-pumped，AMD 明确这是为了避免 AVX-512 带来的频率大幅波动（<a href="https://hothardware.com/reviews/amd-ryzen-ai-zen-5-architecture-overview" target="_blank" rel="noopener">HotHardware Zen 5 解析</a>）。Zen 5（2024）换成完整 512-bit 数据通路，官方称在 AVX-512 负载下<strong>仍可维持多核满载频率</strong>，与 Intel 的实现形成对比（<a href="https://www.tomshardware.com/pc-components/cpus/amd-deep-dives-zen-5-ryzen-9000-and-strix-point-cpu-rdna-35-gpu-and-xdna-2-architectures/4" target="_blank" rel="noopener">Tom's Hardware</a>）。Zen 5 同时把 FADD 延迟从 3 周期降到 2，L1D 从 32 KB / 8 路扩到 48 KB / 12 路，并把 L1↔FPU 带宽翻倍——这些都是在为 512-bit 通路供数。</p>
+<p>注意两点：Zen 5 的向量单元是<strong>模块化</strong>的，APU / 移动端（Strix Point）仍保留 256-bit 版本；Zen 5c 与 Zen 5 共享 ISA。</p>
+<h3 id="arm-isa-2048-128">ARM：ISA 到 2048 位，实现停在 128 位的落差</h3>
+<p>这是理解 ARM 服务器最容易踩的坑。SVE2 的 ISA 允许 128–2048 bit，但<strong>主流服务器的实际实现都是 128 位</strong>：</p>
+<ul><li>Neoverse V2（Grace、Graviton4）：Arm 官方 TRM 明写 "The Neoverse V2 core implements a scalable vector length of 128 bits"；NVIDIA 的描述是 "in a 4x128-bit configuration"。</li><li>Neoverse V3：Arm 官方 TRM 同样是 "Implementation of the Scalable Vector Extension (SVE) with a 128-bit vector length"（<a href="https://developer.arm.com/documentation/107734/0002/The-Neoverse--V3--core/Neoverse--V3--core-features?lang=en" target="_blank" rel="noopener">Arm Neoverse V3 TRM</a>）。</li><li>Neoverse V1 是 256-bit（AWS Graviton3），属于少见的宽实现。</li></ul>
+<p><strong>所以"用 SVE2 重写一遍"在 Neoverse V2/V3 上不会带来宽度红利</strong>——位宽和 NEON 一样是 128。SVE2 的真实收益在别处：谓词（免尾部循环）、更丰富的指令（<code>svdot</code>、gather/scatter、bitperm、SHA3）、以及"同一个二进制未来能在更宽的机器上运行"的可移植性。这与 AVX-512 的卖点（更宽）完全不同，值得强调。</p>
+<h3 id="apple-neon-sme-amx">Apple：NEON + SME + 那个不公开的 AMX</h3>
+<p>Apple M 系列的 CPU 侧有三层：</p>
+<ol><li><strong>NEON</strong>：128-bit，每周期可发射 4 条（Firestorm/M1 上的实测值，第三方逆向）。就纯 SIMD 宽度而言，Apple 是四家里最窄的——只有 AMD Zen 5 的 1/4。</li><li><strong>Apple AMX</strong>：CPU 侧紧耦合的矩阵协处理器，未公开。第三方逆向显示 M1→M2 增加 BF16 支持，M2→M3 给 <code>ldx</code>/<code>ldy</code>/<code>matint</code> 各加一种模式，M3→M4 调整了 <code>extrh</code>/<code>extrv</code>/<code>vecfp</code>/<code>vecint</code> 的低位处理。</li><li><strong>SME</strong>：M4 实现了 SME/SME2（但<strong>没有实现普通 SVE</strong>），streaming 向量长度 SVL = 512 bit，ZA 存储 4096 字节。第三方在 M4 Pro 上用 Eigen 的 SME2 GEMM kernel 实测到相对 NEON 的 <strong>10–13 倍</strong>加速（<a href="https://gitlab.com/libeigen/eigen/-/merge_requests/2128" target="_blank" rel="noopener">Eigen MR 2128</a>，第三方实测）。</li></ol>
+<p>即 Apple 的路线是"窄 SIMD + 大矩阵单元"，而不是把 SIMD 做宽。这与 Intel AMX / ARM SME 是同一个判断：AI 负载要用二维 tile 提高算术强度，而不是继续拉长向量。</p>
+<hr>
+<h2 id="sec-29">五、延伸知识点</h2>
+<ol><li><strong>向量宽度翻倍 ≠ 加速比翻倍。</strong>先算 AI，再算 ridge 带宽 = 计算峰值 ÷ AI。SAXPY 的 AI 是 1/6 FLOP/B，需要 576 GB/s 才能让 AVX2 跑满、1152 GB/s 才能让 AVX-512 跑满——后者超出目前任何单路 CPU。<strong>加宽向量只在计算受限区有效。</strong></li><li><strong>判断带宽瓶颈还是计算瓶颈，最快的方法是改工作集大小。</strong>把 n 缩小到数据能进 L1（比如 32 KB）再测一次：如果时间大幅下降，说明原负载在访存侧；如果基本不变，说明在计算侧。配合 <code>perf stat -e</code> 看 <code>CORE_POWER.LVL2_TURBO_LICENSE</code>（Intel）或 L1/L2 miss 率更直接。 MLP 决定你能否榨干剩余带宽，诊断方法见 <a href="../reading/memory-hierarchy-latency-hiding.html">内存层次与延迟隐藏</a>。</li><li><strong>gather 什么时候还不如标量。</strong>经验法则是"每周期约 1 个 lane"，而连续 load 每周期能吞 2–3 个完整向量，差距可达 30 倍。Zen 3 上 <code>VPGATHERDD ymm</code> 是 39 个 μops / 逆吞吐 8 周期，基本和标量持平。判据：gather 之后每个元素如果只做一两次运算，不值得；clang 在 <code>-O3 -march=native</code> 下自动生成的 gather 甚至可能让程序慢一倍。</li><li><strong>掩码寄存器取代的是"分支 + blend"，而不只是分支。</strong>AVX-512 的 k0–k7 与 SVE 的 P0–P15 把条件变成操作数，SVE 更进一步——不活跃 lane 连内存都不访问，越界也不会缺页，于是尾部循环彻底消失。这是 <a href="../problems/masked-saxpy-branchless.html">掩码 SAXPY</a> 的硬件根据，也是 SVE 与固定宽度 SIMD 最本质的区别之一。</li><li><strong><code>-mprefer-vector-width=256</code> 的真实作用。</strong>它只约束<strong>编译器自动向量化时选用的最大向量宽度</strong>，让 GCC/Clang 把 8×32-bit 的循环用两条 ymm 而不是一条 zmm 来实现。它不影响手写 intrinsic 生成的指令，也不"关闭"CPU 的 512-bit 单元——它只是少生成 512-bit 指令，从而<strong>顺便</strong>避开 L2 license 降频。如果你的负载是混合型的（大部分标量、偶尔一小段向量），256 位往往是更优解：降频是全局的，会拖累同一核上的标量代码。</li><li><strong>AVX10 对现有代码的意义。</strong>版本号枚举（一个 CPUID bit + 一个版本号）取代了 AVX-512 那二十来个 feature flag，"支持 AVX10.2"是一句有确定含义的话。对开发者：编译选项从 <code>-mavx512f -mavx512bw -mavx512vl -mavx512dq ...</code> 收敛成一个 <code>avx10.2</code>；对生态：AVX-512 ISA 冻结、新特性只加在 AVX10 上、且未来所有核心（含 E-core）都是 512-bit——Alder Lake 那场"有没有 AVX-512"的闹剧理论上不会再重演。</li><li><strong>动手查你的 CPU 到底支持什么。</strong>Linux：<code>grep -o -w 'avx512f\|avx10_1\|avx10_2\|amx_bf16\|amx_tile' /proc/cpuinfo | sort -u</code>；AArch64 用 <code>getauxval(AT_HWCAP)</code> 查 <code>HWCAP_SVE</code> / <code>HWCAP2_SME</code>，SVE 的<strong>实际</strong>向量长度要用 <code>prctl(PR_SVE_GET_VL)</code> 读（ISA 允许到 2048，实现可能只有 128，别猜）。macOS / Windows 可以借助跨平台的 <code>cpuinfo</code> 库（Python 的 <code>py-cpuinfo</code>、C/C++ 的 <code>pytorch/cpuinfo</code>）。Apple 的 AMX 与 SME 没有官方查询接口（Apple 不公开 AMX 文档），第三方工具只能靠逆向探测——<strong>这类数字请一律当作"第三方实测，非官方"来引用</strong>。</li></ol>
+<hr>
+<h2 id="sec-30">参考来源</h2>
+<ul><li><a href="https://cdrdv2-public.intel.com/856721/361050-005-intel-avx10.2-spec-jun2025.pdf" target="_blank" rel="noopener">Intel Advanced Vector Extensions 10.2 Architecture Specification, Rev 5.0, 文档号 361050-005（2025-06）</a> —— AVX10 的收敛目标、32 向量寄存器+8 掩码寄存器、AVX10.1 首发于 Granite Rapids、AVX10.2 新增 FP8 等六类指令、CPUID 枚举方式、"所有 AVX10 处理器支持全部向量长度"（官方规范，一手来源）</li><li><a href="https://cdrdv2-public.intel.com/814198/248966-Optimization-Reference-Manual-V1-050.pdf" target="_blank" rel="noopener">Intel 64 and IA-32 Architectures Optimization Reference Manual Vol.1, 文档号 248966-050</a> —— AVX-512 频率惩罚的 L0/L1/L2 三档结构、触发指令分类、PMU 事件名、500 μs 升档延迟与 2 ms 回血定时器、Xeon 8180 的 65 周期跨档阈值、以及"重度 AVX-512 的 DL 负载相对 AVX2 仍有 1.3–1.5× 提升"的官方结论（官方手册，Table 2-12 / Fig 2-8）</li><li><a href="https://travisdowns.github.io/blog/2020/01/17/avxfreq1.html" target="_blank" rel="noopener">Travis Downs：Gathering Intel on Intel AVX-512 Transitions（2020-01）</a> —— SKX W-2104 上实测三档频率 3.2 / 2.8 / 2.4 GHz、一次降档约 9 μs 升压 + 11 μs 停顿（第三方实测）</li><li><a href="https://www.amd.com/en/blogs/2025/leadership-hpc-performance-with-5th-generation-amd.html" target="_blank" rel="noopener">AMD：5th Gen EPYC 的 HPC 性能（2025）</a> —— Zen 4 = 16 FLOP/cycle（FP64，AVX-512 需 2 周期）、Zen 5 = 32 FLOP/cycle（官方博客，一手来源）</li><li><a href="https://www.tomshardware.com/pc-components/cpus/amd-deep-dives-zen-5-ryzen-9000-and-strix-point-cpu-rdna-35-gpu-and-xdna-2-architectures/4" target="_blank" rel="noopener">Tom's Hardware：AMD Zen 5 架构解析（2024）</a> —— Zen 4 "double-pumped" 256-bit vs Zen 5 完整 512-bit 数据通路、Zen 5 满载不降频</li><li><a href="https://www.techpowerup.com/review/amd-ryzen-7-9700x/2.html" target="_blank" rel="noopener">TechPowerUp：AMD Ryzen 7 9700X 架构页（2024）</a> —— Zen 5 每周期 2 条 512-bit load + 1 条 512-bit store、48 KB L1D、2 周期 FADD</li><li><a href="https://www.techpowerup.com/review/intel-core-ultra-9-285k/3.html" target="_blank" rel="noopener">TechPowerUp：Intel Core Ultra 9 285K 架构页（2024）</a> —— Lion Cove 向量引擎（4 SIMD ALU + 2 FMA）、Skymont 向量引擎为 4 条 128-bit FPU</li><li><a href="https://old.chipsandcheese.com/2023/03/12/a-peek-at-sapphire-rapids/" target="_blank" rel="noopener">Chips and Cheese：Sapphire Rapids 微架构实测（2023）</a> —— 2×512-bit FMA 的端口构成、掩码寄存器重命名条目、未见固化 AVX-512 频率惩罚</li><li><a href="https://www.tomshardware.com/features/intel-architecture-day-2021-intel-unveils-alder-lake-golden-cove-and-gracemont-cores/2" target="_blank" rel="noopener">Tom's Hardware：Alder Lake 架构日报道（2021）</a> —— AVX-512 因 E-core 不支持而被熔断、服务器 Golden Cove 有 2×512-bit FMA</li><li><a href="https://developer.arm.com/architectures/scalable-vector-extensions" target="_blank" rel="noopener">Arm：SVE 架构官方介绍</a> —— SVE 向量长度 128–2048 bit（128 为粒度）、Z0–Z31 与 P0–P15、免重编译的可移植性</li><li><a href="https://developer.arm.com/documentation/107734/0002/The-Neoverse--V3--core/Neoverse--V3--core-features?lang=en" target="_blank" rel="noopener">Arm Neoverse V3 Core Technical Reference Manual（2023–2024）</a> —— Neoverse V3 的 SVE 实现向量长度为 128 bit（官方 TRM）</li><li><a href="https://docs.nvidia.com/grace-perf-tuning-guide/index.html" target="_blank" rel="noopener">NVIDIA Grace Performance Tuning Guide</a> —— Neoverse V2 以 "4x128-bit" 配置实现 SVE2 与 NEON</li><li><a href="https://www.intel.co.za/content/www/us/en/developer/articles/technical/tuning-guide-for-ai-on-the-4th-generation.html" target="_blank" rel="noopener">Intel：第四代至强可扩展处理器 AI 调优指南</a> —— Intel AMX 的 8 个 tile（16 行 × 64 字节 = 1 KiB）、TMUL 单元、BF16/INT8 支持（官方文档）</li><li><a href="https://github.com/corsix/amx" target="_blank" rel="noopener">corsix/amx：Apple AMX 指令集逆向工程仓库</a> —— Apple AMX 的 X/Y/Z 寄存器堆与 32×32 MAC 网格、各代差异；<strong>明确指出 Apple AMX 与 Intel AMX 完全不同</strong>（第三方逆向，非官方）</li><li><a href="https://arxiv.org/abs/2512.21473" target="_blank" rel="noopener">arXiv 2512.21473《Demystifying ARM SME to Optimize General Matrix Multiplications》（2025-12）</a> —— Apple M4 Pro 上 SME 的 SVL = 512 bit、ZA = 4096 字节、FMOPA 外积与 tile 语义</li><li><a href="https://gitlab.com/libeigen/eigen/-/merge_requests/2128" target="_blank" rel="noopener">Eigen MR 2128：ARM SME2 GEMM backend</a> —— Apple M4 Pro 上 SME2 GEMM 相对 NEON 实测 10–13 倍加速（第三方实测）</li><li><a href="https://github.com/google/highway/blob/2c2cdd144e9aabe16220682445ee9a7a33c5a851/g3doc/faq.md" target="_blank" rel="noopener">google/highway FAQ</a> —— gather/scatter "每周期约 1 个 lane" 的经验值、早期 Intel 降频的实测幅度</li><li><a href="https://github.com/llvm/llvm-project/issues/87640" target="_blank" rel="noopener">LLVM issue #87640</a> —— clang 自动生成 gather/scatter 导致程序慢一倍的真实案例</li><li><a href="https://documentation.suse.com/en-us/sbp/tuning-performance/html/SBP-AMD-EPYC-5-SLES15SP6/index.html" target="_blank" rel="noopener">SUSE / AMD：Optimizing Linux for AMD EPYC 9005（2025-04）</a> —— EPYC 9005 单路 12 内存通道、DDR5-6000、单通道峰值 48 GB/s（即 576 GB/s 理论总带宽）</li><li><a href="https://www.hwcooling.net/en/zen-5-amds-most-innovative-core-since-the-original-zen-analysis/4" target="_blank" rel="noopener">HWCooling：Zen 5 深度解析（2024）</a> —— 各家 SIMD 流水线宽度横向对比（Lion Cove 4×256-bit、Apple 4×128-bit、Cortex-X925 6×128-bit）</li><li><a href="https://www.phoronix.com/news/Intel-AVX10-Drops-256-Bit" target="_blank" rel="noopener">Phoronix：Intel AVX10 Drops Optional 512-bit（2025-03-19）</a> —— AVX10 白皮书 3.0 修订放弃 256-bit-only 方案、GCC/LLVM 补丁原文（"all the future platforms will now support 512 bit vector width, including P-core and E-core"）</li><li><a href="https://www.pcgamer.com/intel-kills-alder-lake-avx-512-support-for-good" target="_blank" rel="noopener">PCGamer：Intel kills Alder Lake AVX-512 support for good（2022）</a> —— Alder Lake 后期批次硅片熔断 AVX-512</li></ul>
+<hr>
+<h2 id="sec-31">系列导航：处理器微架构深度指南</h2>
+<p>本文是《处理器微架构深度指南》系列之一。</p>
+<p><strong>同系列其他文章</strong>：</p>
+<ul><li><a href="branch-prediction-guide.html">分支预测完全指南：从一次数据重排优化说起</a></li><li><a href="compiler-branch-optimization.html">编译器如何自动优化分支预测</a></li><li><a href="cache-hierarchy-complete-guide.html">缓存层次完全指南：从一次矩阵乘法分块说起</a></li><li><a href="ilp-and-pipeline-complete-guide.html">ILP 与流水线完全指南：从八累加器点积说起</a></li><li><a href="memory-hierarchy-latency-hiding.html">内存层次与延迟隐藏：从指针追逐说起</a></li><li><a href="rob-out-of-order-complete-guide.html">ROB 与乱序执行完全指南：一次瓶颈会诊的完整拆解</a></li><li><a href="frontend-and-instruction-cache.html">前端与指令缓存：为什么过度展开反而更慢</a></li><li><a href="tlb-address-translation-guide.html">TLB 与地址转换：从一次聚集重排说起</a></li></ul>
+<p>所属模块：<a href="../modules/simd.html">SIMD 与向量化</a></p>
+<p class="tags"><span class="tag">SIMD</span><span class="tag">AVX-512</span><span class="tag">AVX10</span><span class="tag">SVE</span><span class="tag">roofline</span><span class="tag">向量化</span></p>
+<div class="pager">
+  <a href="../reading.html"><span class="k">← 返回</span>扩展阅读</a>
+  <a class="next" href="../modules/simd.html"><span class="k">所属模块 →</span>SIMD 与向量化</a>
+</div>
+</main>
+  <aside class="toc"><h4>本页目录</h4><a href="#saxpy" class="lv2">一、一个可复现实验：SAXPY 的四档向量宽度</a><a href="#sec-3" class="lv3">实验设计</a><a href="#4-8-16" class="lv3">理论加速比：4 → 8 → 16</a><a href="#roofline" class="lv3">为什么实测达不到：roofline 与算术强度</a><a href="#n-512" class="lv3">大 n：带宽接管之后，512 位白给</a><a href="#n-l1" class="lv3">小 n：驻留 L1 时，宽度是真的有用</a><a href="#gemm" class="lv3">反例：寄存器分块的 GEMM</a><a href="#sec-9" class="lv3">判据小结</a><a href="#sec-10" class="lv2">二、硬件全景：向量宽度到底由哪一级决定</a><a href="#xmm-zmm-v-z" class="lv3">寄存器堆：从 xmm 到 zmm，从 V 到 Z</a><a href="#sec-12" class="lv3">执行端口与数据通路宽度</a><a href="#avx-512-license" class="lv3">频率惩罚：AVX-512 的 license 三档</a><a href="#sec-14" class="lv3">掩码寄存器：可变长度向量的条件执行</a><a href="#gather-scatter" class="lv3">Gather / Scatter：不连续访问的代价</a><a href="#sec-16" class="lv3">在整条流水线上的位置</a><a href="#sec-17" class="lv2">三、演进史：每一步解决了什么、付出了什么</a><a href="#x86-mmx-sse-avx-avx2-avx-512" class="lv3">x86 主线：MMX → SSE → AVX/AVX2 → AVX-512</a><a href="#alder-lake-avx-512" class="lv3">Alder Lake 与 AVX-512 的"启用—禁用"反复</a><a href="#avx10-intel-2023" class="lv3">AVX10：Intel 的统一方案（2023 起）</a><a href="#arm-neon-sve-sve2-sme" class="lv3">ARM 主线：NEON → SVE/SVE2 → SME</a><a href="#amx-sme" class="lv3">矩阵扩展：三个都叫 AMX / SME，但完全不是一回事</a><a href="#2024-2026" class="lv2">四、真实处理器对比（2024–2026）</a><a href="#sec-24" class="lv3">各家当前实现</a><a href="#intel-avx-512" class="lv3">Intel：哪些型号有 AVX-512，哪些被阉割</a><a href="#amd-zen-4-zen-5-512-bit" class="lv3">AMD：Zen 4 与 Zen 5 的 512-bit 差别</a><a href="#arm-isa-2048-128" class="lv3">ARM：ISA 到 2048 位，实现停在 128 位的落差</a><a href="#apple-neon-sme-amx" class="lv3">Apple：NEON + SME + 那个不公开的 AMX</a><a href="#sec-29" class="lv2">五、延伸知识点</a><a href="#sec-30" class="lv2">参考来源</a><a href="#sec-31" class="lv2">系列导航：处理器微架构深度指南</a></aside>
+</div>
+<footer>
+  本站为 <a href="https://www.leetcpu.com/">leetcpu.com</a> 课程与题目的中文整理版，
+  仅用于学习交流；题目、代码版权归原站所有。内容由程序从公开页面整理并人工撰写优化报告。
+</footer>
+<script src="../assets/search.js"></script>
+<script src="../assets/app.js"></script>
+</body>
+</html>
